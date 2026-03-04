@@ -1,4 +1,4 @@
-[data-theme='merces'] {
+[data-theme='payme'] {
     --background: oklch(0.99 0.005 240);
     --foreground: oklch(0.15 0.02 240);
     --card: oklch(1 0 0);
@@ -36,7 +36,7 @@
     --shadow-color: hsl(220 20% 10% / 0.1);
 }
 
-[data-theme='merces'].dark {
+[data-theme='payme'].dark {
     --background: oklch(0.12 0.02 250);
     --foreground: oklch(0.95 0.01 240);
     --card: oklch(0.15 0.02 250);
@@ -67,7 +67,7 @@
     --shadow-color: hsl(220 40% 2% / 0.5);
 }
 
-[data-theme='merces'] {
+[data-theme='payme'] {
     @theme inline {
         --color-background: var(--background);
         --color-foreground: var(--foreground);

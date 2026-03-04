@@ -6,7 +6,7 @@ This file provides essential information for AI coding agents working on this pr
 
 ## Project Overview
 
-**Merces Payroll** is a production-ready blockchain-based payroll system built with:
+**PayMe Private Card** is a production-ready system for confidential transactions built with:
 
 - **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript 5.7
@@ -42,7 +42,7 @@ The project follows a feature-based folder structure designed for scalability in
 
 ### Data & APIs
 - TanStack Table for data tables
-- Recharts for analytics/charts (to be refined for payroll use cases)
+- Recharts for analytics/charts (to be refined for card usage patterns)
 
 ### Development Tools
 - ESLint 8.x with Next.js core-web-vitals config

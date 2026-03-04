@@ -31,7 +31,6 @@ import { UserAvatarProfile } from '@/components/user-avatar-profile';
 import { navItems } from '@/config/nav-config';
 import { useIsMounted } from '@/hooks/use-is-mounted';
 import { useMediaQuery } from '@/hooks/use-media-query';
-import { useFilteredNavItems } from '@/hooks/use-nav';
 import {
   IconBell,
   IconChevronRight,
@@ -45,19 +44,15 @@ import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 import { Icons } from '../icons';
 
-const mockWallet = {
-  address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
-  network: 'Sepolia',
-  isConnected: true
-};
+// Mock wallet removed
 
 export default function AppSidebar() {
   const pathname = usePathname();
   const { isOpen } = useMediaQuery();
   const mounted = useIsMounted();
-  const wallet = mockWallet;
+  const wallet = null; // Removed mock data
   const router = useRouter();
-  const filteredItems = useFilteredNavItems(navItems);
+  const filteredItems = navItems;
 
   React.useEffect(() => {
     // Side effects based on sidebar state changes

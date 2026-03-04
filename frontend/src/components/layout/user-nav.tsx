@@ -13,21 +13,15 @@ import { UserAvatarProfile } from '@/components/user-avatar-profile';
 import { useRouter } from 'next/navigation';
 import { useIsMounted } from '@/hooks/use-is-mounted';
 
-const mockWallet = {
-  address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
-  network: 'Sepolia',
-  isConnected: true
-};
-
 export function UserNav() {
   const router = useRouter();
   const mounted = useIsMounted();
-  const wallet = mockWallet;
+  const wallet = null as any; // Removed mock data
 
   if (!mounted) return null;
-  const truncatedAddress = wallet.address
+  const truncatedAddress = wallet?.address
     ? `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`
-    : 'Not Connected';
+    : 'No Wallet Linked';
 
   return (
     <DropdownMenu>
@@ -47,8 +41,8 @@ export function UserNav() {
             <p className='text-sm leading-none font-medium'>
               {truncatedAddress}
             </p>
-            <p className='text-muted-foreground text-xs leading-none'>
-              {wallet.network}
+            <p className='text-muted-foreground text-xs leading-none uppercase tracking-wider'>
+              {wallet?.network || 'Disconnected'}
             </p>
           </div>
         </DropdownMenuLabel>

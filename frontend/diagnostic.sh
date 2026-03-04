@@ -1,0 +1,7 @@
+echo "--- PATH DIAGNOSTIC ---"
+echo "Current directory: $(pwd)"
+echo "Next.js cache path: $(grep -o "\"appDir\":\"[^\"]*\"" .next/required-server-files.json 2>/dev/null || echo "not found")"
+echo "--- CODE CONTENT ---"
+echo "Dashboard Page title in this folder: $(grep -o "text-3xl font-bold tracking-tight\">[A-Za-z]*" src/app/dashboard/page.tsx | cut -d">" -f2)"
+echo "Sidebar items count in this folder: $(grep -c "title:" src/config/nav-config.ts)"
+echo "Debug label presence: $(grep -c "PROJECT: PAYME (CORRECT)" src/components/layout/app-sidebar.tsx)"

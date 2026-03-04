@@ -5,8 +5,8 @@ import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 
 export const metadata: Metadata = {
-  title: 'Merces Payroll',
-  description: 'Blockchain-based payroll system',
+  title: 'PayMe Private Card',
+  description: 'Private Card system on Zama FHEVM',
   robots: {
     index: false,
     follow: false

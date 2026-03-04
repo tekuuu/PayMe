@@ -16,8 +16,8 @@ const META_THEME_COLORS = {
 };
 
 export const metadata: Metadata = {
-  title: 'Merces Payroll',
-  description: 'Blockchain-based payroll system'
+  title: 'PayMe Private Card',
+  description: 'Private Card system on Zama FHEVM'
 };
 
 export const viewport: Viewport = {

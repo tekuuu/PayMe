@@ -1,6 +1,6 @@
-# Merces Payroll
+# PayMe Private Card
 
-Blockchain-based payroll system.
+Private Card system on Zama FHEVM.
 
 - **Framework**: [Next.js](https://nextjs.org/) (App Router)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)

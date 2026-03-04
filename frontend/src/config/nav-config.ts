@@ -40,5 +40,37 @@ export const navItems: NavItem[] = [
     isActive: false,
     shortcut: ['d', 'd'],
     items: []
+  },
+  {
+    title: 'My Card',
+    url: '/dashboard/my-card',
+    icon: 'card',
+    isActive: false,
+    shortcut: ['m', 'c'],
+    items: []
+  },
+  {
+    title: 'Subscriptions',
+    url: '/dashboard/subscriptions',
+    icon: 'subscriptions',
+    isActive: false,
+    shortcut: ['s', 's'],
+    items: []
+  },
+  {
+    title: 'Activity',
+    url: '/dashboard/activity',
+    icon: 'activity',
+    isActive: false,
+    shortcut: ['a', 'a'],
+    items: []
+  },
+  {
+    title: 'Settings',
+    url: '/dashboard/settings',
+    icon: 'settings',
+    isActive: false,
+    shortcut: [',', ','],
+    items: []
   }
 ];
