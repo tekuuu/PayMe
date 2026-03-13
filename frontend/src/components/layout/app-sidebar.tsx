@@ -1,18 +1,11 @@
 'use client';
+/** @jsxRuntime automatic */
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger
 } from '@/components/ui/collapsible';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
+
 import {
   Sidebar,
   SidebarContent,
@@ -41,16 +34,21 @@ import {
 } from '@tabler/icons-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import * as React from 'react';
+import React, { useState } from 'react';
 import { Icons } from '../icons';
-
-// Mock wallet removed
+import { useAccount, useDisconnect, useChainId } from 'wagmi';
 
 export default function AppSidebar() {
   const pathname = usePathname();
   const { isOpen } = useMediaQuery();
   const mounted = useIsMounted();
-  const wallet = null; // Removed mock data
+  const { address, isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
+  const chainId = useChainId();
+
+  const network = chainId === 11155111 ? 'Sepolia' : (chainId ? `Chain ${chainId}` : 'Unknown');
+  const wallet = isConnected ? { address: address as string, network, isConnected } : null;
+  const [showSidebarMenu, setShowSidebarMenu] = useState(false);
   const router = useRouter();
   const filteredItems = navItems;
 
@@ -67,8 +65,8 @@ export default function AppSidebar() {
   }
 
   return (
-    <Sidebar collapsible='icon'>
-      <SidebarContent className='overflow-x-hidden'>
+    <Sidebar collapsible='icon' className='w-64'>
+      <SidebarContent className='overflow-visible w-full'>
         <SidebarGroup>
 
           <SidebarMenu>
@@ -131,60 +129,39 @@ export default function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  size='lg'
-                  className='data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
-                >
-                  {wallet && (
-                    <UserAvatarProfile
-                      className='h-8 w-8 rounded-lg'
-                      showInfo
-                      wallet={wallet}
-                    />
-                  )}
-                  <IconChevronsDown className='ml-auto size-6' />
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                className='w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg'
-                side='bottom'
-                align='end'
-                sideOffset={4}
+            {/* Simple Avatar Menu */}
+            <div className="relative">
+              <button
+                onClick={() => setShowSidebarMenu(!showSidebarMenu)}
+                className="flex items-center gap-2 rounded-lg p-2 hover:bg-sidebar-accent"
               >
-                <DropdownMenuLabel className='p-0 font-normal'>
-                  <div className='px-1 py-1.5'>
-                    {wallet && (
-                      <UserAvatarProfile
-                        className='h-8 w-8 rounded-lg'
-                        showInfo
-                        wallet={wallet}
-                      />
-                    )}
+                <UserAvatarProfile
+                  className="h-8 w-8 rounded-lg"
+                  showInfo
+                  wallet={wallet}
+                />
+                {isOpen && <IconChevronsDown className="ml-auto size-5" />}
+              </button>
+              {showSidebarMenu && (
+                <div className="absolute right-0 mt-2 min-w-[200px] rounded-md bg-popover shadow-lg ring-1 ring-border">
+                  <div className="p-2">
+                    <p className="text-sm font-medium truncate">{wallet?.address ? `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}` : 'Not Connected'}</p>
+                    <p className="text-xs text-muted-foreground truncate">{wallet?.network || 'Disconnected'}</p>
                   </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-
-                <DropdownMenuGroup>
-                  <DropdownMenuItem
-                    onClick={() => router.push('/dashboard/profile')}
+                  <div className="border-t border-border" />
+                  <button
+                    onClick={() => {
+                      disconnect();
+                      setShowSidebarMenu(false);
+                    }}
+                    className="flex w-full items-center px-4 py-2 text-destructive hover:bg-destructive/10"
                   >
-                    <IconUserCircle className='mr-3 h-6 w-6' />
-                    Profile
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <IconBell className='mr-3 h-6 w-6' />
-                    Notifications
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => console.log('Sign out clicked')}>
-                  <IconLogout className='mr-3 h-6 w-6' />
-                  Disconnect Wallet
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                    <IconLogout className="mr-2 h-4 w-4" />
+                    Disconnect Wallet
+                  </button>
+                </div>
+              )}
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

@@ -1,0 +1,25 @@
+{
+  "devFiles": [],
+  "ampDevFiles": [],
+  "polyfillFiles": [
+    "static/chunks/474fd_next_dist_build_polyfills_polyfill-nomodule.js"
+  ],
+  "lowPriorityFiles": [],
+  "rootMainFiles": [
+    "static/chunks/[turbopack]_browser_dev_hmr-client_hmr-client_ts_45a5622c._.js",
+    "static/chunks/474fd_next_dist_compiled_react-dom_ce66264f._.js",
+    "static/chunks/474fd_next_dist_compiled_react-server-dom-turbopack_ca492399._.js",
+    "static/chunks/474fd_next_dist_compiled_next-devtools_index_15f86b04.js",
+    "static/chunks/474fd_next_dist_compiled_62cd8b83._.js",
+    "static/chunks/474fd_next_dist_client_841ee131._.js",
+    "static/chunks/474fd_next_dist_a4bd2c48._.js",
+    "static/chunks/474fd_@sentry_core_build_esm_cdeac819._.js",
+    "static/chunks/474fd_@sentry-internal_browser-utils_build_esm_5a0a304e._.js",
+    "static/chunks/474fd_d41cfdcc._.js",
+    "static/chunks/Documents_zama_merces-front2_src_instrumentation-client_ts_e9952c6e._.js",
+    "static/chunks/Documents_zama_merces-front2_a0ff3932._.js",
+    "static/chunks/turbopack-Documents_zama_merces-front2_2f024525._.js"
+  ],
+  "pages": {},
+  "ampFirstPages": []
+}

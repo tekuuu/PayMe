@@ -12,22 +12,30 @@ import {
 import { UserAvatarProfile } from '@/components/user-avatar-profile';
 import { useRouter } from 'next/navigation';
 import { useIsMounted } from '@/hooks/use-is-mounted';
+import { useMe } from '@/providers/auth-provider';
+import SmartWalletOnboarding from '@/components/auth/smart-wallet-onboarding';
+import { Power } from 'lucide-react';
 
 export function UserNav() {
   const router = useRouter();
   const mounted = useIsMounted();
-  const wallet = null as any; // Removed mock data
+  const { me, disconnect } = useMe();
 
   if (!mounted) return null;
-  const truncatedAddress = wallet?.address
-    ? `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`
-    : 'No Wallet Linked';
+
+  if (!me) {
+    return <SmartWalletOnboarding />;
+  }
+
+  const truncatedAddress = me.account
+    ? `${me.account.slice(0, 6)}...${me.account.slice(-4)}`
+    : 'New Wallet';
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant='ghost' className='relative h-8 w-8 rounded-full'>
-          <UserAvatarProfile wallet={wallet} />
+        <Button variant='ghost' className='relative h-8 w-8 rounded-full focus-visible:ring-primary/20'>
+          <UserAvatarProfile wallet={{ address: me.account || '', isConnected: true }} />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -42,21 +50,24 @@ export function UserNav() {
               {truncatedAddress}
             </p>
             <p className='text-muted-foreground text-xs leading-none uppercase tracking-wider'>
-              {wallet?.network || 'Disconnected'}
+              Smart Wallet
             </p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => router.push('/dashboard/profile')}>
-            Profile
+          <DropdownMenuItem onClick={() => router.push('/dashboard/activity')}>
+            Activity
           </DropdownMenuItem>
-          <DropdownMenuItem>Billing</DropdownMenuItem>
-          <DropdownMenuItem>Settings</DropdownMenuItem>
-          <DropdownMenuItem>New Team</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push('/dashboard/my-card')}>My Card</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>Settings</DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => console.log('Disconnect clicked')}>
+        <DropdownMenuItem
+          className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+          onClick={() => disconnect()}
+        >
+          <Power className="mr-2 h-4 w-4" />
           Disconnect Wallet
         </DropdownMenuItem>
       </DropdownMenuContent>

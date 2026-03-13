@@ -1,5 +1,6 @@
 import AppSidebar from '@/components/layout/app-sidebar';
 import Header from '@/components/layout/header';
+import DashboardGuard from '@/components/auth/dashboard-guard';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
@@ -27,7 +28,7 @@ export default async function DashboardLayout({
       <SidebarInset>
         <Header />
         {/* page main content */}
-        {children}
+        <DashboardGuard>{children}</DashboardGuard>
         {/* page main content ends */}
       </SidebarInset>
     </SidebarProvider>
