@@ -20,35 +20,19 @@ import {
   SidebarMenuSubItem,
   SidebarRail
 } from '@/components/ui/sidebar';
-import { UserAvatarProfile } from '@/components/user-avatar-profile';
+import { NavUser } from '@/components/nav-user';
 import { navItems } from '@/config/nav-config';
 import { useIsMounted } from '@/hooks/use-is-mounted';
 import { useMediaQuery } from '@/hooks/use-media-query';
-import {
-  IconBell,
-  IconChevronRight,
-  IconChevronsDown,
-  IconCreditCard,
-  IconLogout,
-  IconUserCircle
-} from '@tabler/icons-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import React, { useState } from 'react';
+import React from 'react';
 import { Icons } from '../icons';
-import { useAccount, useDisconnect, useChainId } from 'wagmi';
 
 export default function AppSidebar() {
   const pathname = usePathname();
   const { isOpen } = useMediaQuery();
   const mounted = useIsMounted();
-  const { address, isConnected } = useAccount();
-  const { disconnect } = useDisconnect();
-  const chainId = useChainId();
-
-  const network = chainId === 11155111 ? 'Sepolia' : (chainId ? `Chain ${chainId}` : 'Unknown');
-  const wallet = isConnected ? { address: address as string, network, isConnected } : null;
-  const [showSidebarMenu, setShowSidebarMenu] = useState(false);
   const router = useRouter();
   const filteredItems = navItems;
 
@@ -127,43 +111,7 @@ export default function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            {/* Simple Avatar Menu */}
-            <div className="relative">
-              <button
-                onClick={() => setShowSidebarMenu(!showSidebarMenu)}
-                className="flex items-center gap-2 rounded-lg p-2 hover:bg-sidebar-accent"
-              >
-                <UserAvatarProfile
-                  className="h-8 w-8 rounded-lg"
-                  showInfo
-                  wallet={wallet}
-                />
-                {isOpen && <IconChevronsDown className="ml-auto size-5" />}
-              </button>
-              {showSidebarMenu && (
-                <div className="absolute right-0 mt-2 min-w-[200px] rounded-md bg-popover shadow-lg ring-1 ring-border">
-                  <div className="p-2">
-                    <p className="text-sm font-medium truncate">{wallet?.address ? `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}` : 'Not Connected'}</p>
-                    <p className="text-xs text-muted-foreground truncate">{wallet?.network || 'Disconnected'}</p>
-                  </div>
-                  <div className="border-t border-border" />
-                  <button
-                    onClick={() => {
-                      disconnect();
-                      setShowSidebarMenu(false);
-                    }}
-                    className="flex w-full items-center px-4 py-2 text-destructive hover:bg-destructive/10"
-                  >
-                    <IconLogout className="mr-2 h-4 w-4" />
-                    Disconnect Wallet
-                  </button>
-                </div>
-              )}
-            </div>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <NavUser />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { IconCreditCard, IconLock, IconShieldCheck } from '@tabler/icons-react';
 import { useMe } from '@/providers/auth-provider';
 import SmartWalletOnboarding from '@/components/auth/smart-wallet-onboarding';
+import { SendTokenCard } from '@/components/smart-wallet/send-token-card';
 
 export default function MyCardPage() {
     const { me } = useMe();
@@ -38,25 +39,25 @@ export default function MyCardPage() {
                     </div>
                 </div>
 
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2 p-4 md:p-8">
-                    <Card className="overflow-hidden border bg-slate-950 text-white shadow-2xl relative">
+                <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-1 p-4 md:p-8">
+                    <Card className="overflow-hidden border bg-slate-950 text-white shadow-2xl relative max-w-xs">
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.05),transparent)] pointer-events-none" />
-                        <CardHeader className="relative pb-0">
-                            <div className="absolute top-6 right-6 text-primary">
-                                <IconCreditCard size={32} />
+                        <CardHeader className="relative pb-2 px-6 pt-6">
+                            <div className="absolute top-4 right-4 text-primary">
+                                <IconCreditCard size={24} />
                             </div>
-                            <CardTitle className="text-xl font-medium tracking-wide">Secure Virtual Card</CardTitle>
-                            <CardDescription className="text-slate-400">Zama FHEVM Powered</CardDescription>
+                            <CardTitle className="text-lg font-medium tracking-wide">Secure Virtual Card</CardTitle>
+                            <CardDescription className="text-slate-400 text-sm">Zama FHEVM Powered</CardDescription>
                         </CardHeader>
-                        <CardContent className="pt-20 pb-10 relative">
-                            <div className="space-y-8">
-                                <div className="text-3xl font-mono tracking-[0.25em]">
+                        <CardContent className="pt-16 pb-8 px-6 relative">
+                            <div className="space-y-6">
+                                <div className="text-2xl font-mono tracking-[0.2em]">
                                     •••• •••• •••• ••••
                                 </div>
                                 <div className="flex justify-between items-end">
                                     <div className="space-y-1">
                                         <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-semibold">Card Holder</p>
-                                        <p className="text-lg font-medium tracking-tight uppercase truncate max-w-[200px]">
+                                        <p className="text-base font-medium tracking-tight uppercase truncate max-w-[180px]">
                                             {me.account?.slice(0, 10)}...{me.account?.slice(-6)}
                                         </p>
                                     </div>
@@ -69,33 +70,7 @@ export default function MyCardPage() {
                         </CardContent>
                     </Card>
 
-                    <Card className="bg-card/50 border shadow-sm">
-                        <CardHeader>
-                            <div className="flex items-center gap-3">
-                                <div className="p-2.5 bg-primary/10 rounded-xl">
-                                    <IconLock className="text-primary" size={24} />
-                                </div>
-                                <div>
-                                    <CardTitle>Privacy Controls</CardTitle>
-                                    <CardDescription>Manage your card's end-to-end encryption</CardDescription>
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 border border-border/50">
-                                <IconShieldCheck className="text-emerald-500 shrink-0 mt-0.5" size={18} />
-                                <p className="text-sm text-muted-foreground leading-relaxed">
-                                    Your card data is fully encrypted using Zama's Fully Homomorphic Encryption (fhevm).
-                                    Transactions are processed blindly without revealing details.
-                                </p>
-                            </div>
-                            <div className="pt-2">
-                                <p className="text-xs text-muted-foreground italic">
-                                    Note: Security parameters are automatically optimized for your active session.
-                                </p>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <SendTokenCard me={me} />
                 </div>
             </div>
         </PageContainer>

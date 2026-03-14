@@ -1,8 +1,6 @@
 import React from 'react';
 import { SidebarTrigger } from '../ui/sidebar';
 import { UserNav } from './user-nav';
-import { ThemeSelector } from '../themes/theme-selector';
-import { ThemeModeToggle } from '../themes/theme-mode-toggle';
 
 export default function Header() {
   return (
@@ -12,8 +10,6 @@ export default function Header() {
       </div>
 
       <div className='flex items-center gap-2 px-4'>
-        <ThemeModeToggle />
-        <ThemeSelector />
         <UserNav />
       </div>
     </header>

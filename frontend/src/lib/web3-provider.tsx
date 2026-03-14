@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import '@rainbow-me/rainbowkit/styles.css';
 import {
     getDefaultConfig,
@@ -22,28 +22,45 @@ const config = getDefaultConfig({
 
 const queryClient = new QueryClient();
 
-export function Web3Providers({ children }: { children: React.ReactNode }) {
+function RainbowKitWrapper({ children }: { children: React.ReactNode }) {
     const { resolvedTheme } = useTheme();
+    const [mounted, setMounted] = useState(false);
 
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    if (!mounted) {
+        return <>{children}</>;
+    }
+
+    return (
+        <RainbowKitProvider
+            theme={resolvedTheme === 'dark'
+                ? darkTheme({
+                    accentColor: 'oklch(0.7 0.15 200)', // Matches --primary in dark mode
+                    accentColorForeground: 'black',
+                    borderRadius: 'medium',
+                })
+                : lightTheme({
+                    accentColor: 'oklch(0.55 0.18 250)', // Matches --primary in light mode
+                    accentColorForeground: 'white',
+                    borderRadius: 'medium',
+                })
+            }
+        >
+            {children}
+        </RainbowKitProvider>
+    );
+}
+
+export function Web3Providers({ children }: { children: React.ReactNode }) {
     return (
         <WagmiProvider config={config}>
             <QueryClientProvider client={queryClient}>
-                <RainbowKitProvider
-                    theme={resolvedTheme === 'dark'
-                        ? darkTheme({
-                            accentColor: 'oklch(0.7 0.15 200)', // Matches --primary in dark mode
-                            accentColorForeground: 'black',
-                            borderRadius: 'medium',
-                        })
-                        : lightTheme({
-                            accentColor: 'oklch(0.55 0.18 250)', // Matches --primary in light mode
-                            accentColorForeground: 'white',
-                            borderRadius: 'medium',
-                        })
-                    }
-                >
+                <RainbowKitWrapper>
                     {children}
-                </RainbowKitProvider>
+                </RainbowKitWrapper>
             </QueryClientProvider>
         </WagmiProvider>
     );

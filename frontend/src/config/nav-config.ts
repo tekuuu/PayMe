@@ -34,14 +34,6 @@ import { NavItem } from '@/types';
  */
 export const navItems: NavItem[] = [
   {
-    title: 'Dashboard',
-    url: '/dashboard',
-    icon: 'dashboard',
-    isActive: false,
-    shortcut: ['d', 'd'],
-    items: []
-  },
-  {
     title: 'My Card',
     url: '/dashboard/my-card',
     icon: 'card',
@@ -63,14 +55,6 @@ export const navItems: NavItem[] = [
     icon: 'activity',
     isActive: false,
     shortcut: ['a', 'a'],
-    items: []
-  },
-  {
-    title: 'Settings',
-    url: '/dashboard/settings',
-    icon: 'settings',
-    isActive: false,
-    shortcut: [',', ','],
     items: []
   }
 ];
