@@ -27,7 +27,9 @@ const ERC20_ABI = [
 export function useTokenBalances(address?: string) {
   const { data: ethBalance, isError: ethError } = useBalance({
     address: address as `0x${string}`,
-    enabled: !!address,
+    query: {
+      enabled: !!address,
+    }
   });
 
   const { data: usdcBalance, isError: usdcError } = useReadContract({
@@ -35,7 +37,9 @@ export function useTokenBalances(address?: string) {
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: [address as `0x${string}`],
-    enabled: !!address,
+    query: {
+      enabled: !!address,
+    }
   });
 
   const { data: wethBalance, isError: wethError } = useReadContract({
@@ -43,7 +47,9 @@ export function useTokenBalances(address?: string) {
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: [address as `0x${string}`],
-    enabled: !!address,
+    query: {
+      enabled: !!address,
+    }
   });
 
   const formatBalance = (balance: bigint | undefined, decimals: number = 18) => {

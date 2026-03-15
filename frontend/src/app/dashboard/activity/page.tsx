@@ -12,9 +12,9 @@ const activities: any[] = []; // Removed mock data
 export default function ActivityPage() {
     return (
         <PageContainer scrollable>
-            <div className="flex-1 space-y-4">
-                <div className="flex items-center justify-between space-y-2">
-                    <h2 className="text-3xl font-bold tracking-tight">Activity</h2>
+            <div className="flex-1 space-y-2 pt-1">
+                <div className="flex items-center justify-between space-y-0 pb-1">
+                    <h2 className="text-xl font-bold tracking-tight">Activity</h2>
                     <div className="flex items-center space-x-2">
                         <div className="relative w-64">
                             <IconSearch className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />

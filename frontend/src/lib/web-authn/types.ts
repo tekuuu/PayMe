@@ -10,6 +10,7 @@ export type CreateCredential = {
 
 export type P256Credential = {
   rawId: Hex;
+  rawClientDataJSON: string;  // Exact original string from authenticator — must NOT be re-serialized
   clientData: {
     type: string;
     challenge: string;

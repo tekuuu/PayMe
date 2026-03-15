@@ -1,3 +1,4 @@
 export * from "./factory";
 export * from "./entryPoint";
 export * from "./client";
+export * from "./card";

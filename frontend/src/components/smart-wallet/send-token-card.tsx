@@ -19,6 +19,12 @@ import {
 } from '@/components/ui/select';
 import { AlertCircle, Send, CheckCircle2 } from 'lucide-react';
 import { encodeFunctionData, Hex, isAddress, parseEther, parseUnits, zeroAddress } from 'viem';
+import { toast } from 'sonner';
+
+type RecentRecipient = {
+  address: Hex;
+  timestamp: number;
+};
 
 type TokenOption = {
   symbol: 'ETH' | 'USDC' | 'WETH';
@@ -76,6 +82,30 @@ export function SendTokenCard({ me }: { me: Me }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successHash, setSuccessHash] = useState<string | null>(null);
+  const [recentRecipients, setRecentRecipients] = useState<RecentRecipient[]>([]);
+
+  // Load recent recipients on mount
+  useMemo(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('payme_recent_recipients');
+      if (saved) {
+        try {
+          setRecentRecipients(JSON.parse(saved));
+        } catch (e) {
+          console.error('Failed to parse recent recipients', e);
+        }
+      }
+    }
+  }, []);
+
+  const saveRecipient = (address: Hex) => {
+    const newRecent = [
+      { address, timestamp: Date.now() },
+      ...recentRecipients.filter(r => r.address.toLowerCase() !== address.toLowerCase())
+    ].slice(0, 5); // Keep last 5
+    setRecentRecipients(newRecent);
+    localStorage.setItem('payme_recent_recipients', JSON.stringify(newRecent));
+  };
 
   const selectedToken = TOKENS.find((token) => token.symbol === tokenSymbol) || TOKENS[0];
 
@@ -138,19 +168,19 @@ export function SendTokenCard({ me }: { me: Me }) {
       const call =
         selectedToken.address === null
           ? {
-              dest: recipient as Hex,
-              value: amountRaw,
-              data: emptyHex
-            }
+            dest: recipient as Hex,
+            value: amountRaw,
+            data: emptyHex
+          }
           : {
-              dest: selectedToken.address,
-              value: 0n,
-              data: encodeFunctionData({
-                abi: ERC20_ABI,
-                functionName: 'transfer',
-                args: [recipient as Hex, amountRaw]
-              })
-            };
+            dest: selectedToken.address,
+            value: 0n,
+            data: encodeFunctionData({
+              abi: ERC20_ABI,
+              functionName: 'transfer',
+              args: [recipient as Hex, amountRaw]
+            })
+          };
 
       const userOp = await builder.buildUserOp({
         calls: [call],
@@ -162,8 +192,10 @@ export function SendTokenCard({ me }: { me: Me }) {
       const hash = await smartWallet.sendUserOperation({ userOp });
       const receipt = await smartWallet.waitForUserOperationReceipt({ hash });
       setSuccessHash(receipt?.userOpHash || hash);
+      saveRecipient(recipient as Hex);
       setAmount('');
       setRecipient('');
+      toast.success('Payment sent successfully!');
     } catch (submitError: any) {
       const message = submitError?.message || 'Failed to send transaction.';
       if (message.includes("AA21 didn't pay prefund")) {
@@ -178,15 +210,15 @@ export function SendTokenCard({ me }: { me: Me }) {
 
   return (
     <Card className='max-w-xl border'>
-      <CardHeader>
+      <CardHeader className="pb-2">
         <CardTitle className='flex items-center gap-2 text-lg'>
           <Send className='h-4 w-4' />
           Send Payment
         </CardTitle>
-        <CardDescription>Send ETH, USDC, or WETH from your smart card wallet.</CardDescription>
+        <CardDescription className="text-xs">Send ETH, USDC, or WETH from your smart card wallet.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className='space-y-4'>
+        <form onSubmit={onSubmit} className='space-y-3'>
           <div className='space-y-2'>
             <Label htmlFor='token'>Token</Label>
             <Select value={tokenSymbol} onValueChange={(value) => setTokenSymbol(value as TokenOption['symbol'])}>
@@ -212,8 +244,7 @@ export function SendTokenCard({ me }: { me: Me }) {
                 })}
               </SelectContent>
             </Select>
-            <p className='text-xs text-muted-foreground'>Available: {selectedBalanceLabel} {selectedToken.symbol}</p>
-            <p className='text-xs text-muted-foreground'>ETH for gas: {formatBalanceDisplay(ethBalanceRaw, 18)} ETH</p>
+            <p className='text-[10px] text-muted-foreground opacity-80'>Available: {selectedBalanceLabel} {selectedToken.symbol} | Gas: {formatBalanceDisplay(ethBalanceRaw, 18)} ETH</p>
           </div>
 
           <div className='space-y-2'>
@@ -225,6 +256,20 @@ export function SendTokenCard({ me }: { me: Me }) {
               placeholder='0x...'
               autoComplete='off'
             />
+            {recentRecipients.length > 0 && (
+              <div className='flex flex-wrap gap-2 pt-1'>
+                {recentRecipients.map((r) => (
+                  <button
+                    key={r.address}
+                    type='button'
+                    onClick={() => setRecipient(r.address)}
+                    className='px-2 py-1 text-[10px] bg-muted hover:bg-muted/80 rounded-full border border-border transition-colors'
+                  >
+                    {r.address.slice(0, 6)}...{r.address.slice(-4)}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className='space-y-2'>

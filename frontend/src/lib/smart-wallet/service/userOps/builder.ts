@@ -31,8 +31,12 @@ export class UserOpBuilder {
 
   constructor(chain: Chain) {
     this.chain = chain;
-    const rpcUrl = process.env.NEXT_PUBLIC_RPC_ENDPOINT || "https://ethereum-sepolia-rpc.publicnode.com";
-    
+    // Use the standard public RPC for contract reads (eth_call, eth_getCode, eth_estimateGas).
+    // Pimlico is bundler-only and does NOT support these standard methods.
+    const rpcUrl =
+      process.env.NEXT_PUBLIC_RPC_ENDPOINT ||
+      "https://ethereum-sepolia-rpc.publicnode.com";
+
     this.publicClient = createPublicClient({
       chain,
       transport: http(rpcUrl),
@@ -57,12 +61,34 @@ export class UserOpBuilder {
     maxFeePerGas,
     maxPriorityFeePerGas,
     keyId,
+    nonce,
   }: {
     calls: Call[];
-    maxFeePerGas: bigint;
-    maxPriorityFeePerGas: bigint;
+    maxFeePerGas?: bigint;
+    maxPriorityFeePerGas?: bigint;
     keyId: Hex;
+    nonce?: bigint;
   }): Promise<UserOperationAsHex> {
+    // Ensure bundler client methods are available even if caller forgot to init.
+    smartWallet.init();
+
+    // 0. Resolve gas prices if not provided
+    let resolvedMaxFeePerGas = maxFeePerGas;
+    let resolvedMaxPriorityFeePerGas = maxPriorityFeePerGas;
+
+    if (!resolvedMaxFeePerGas || !resolvedMaxPriorityFeePerGas) {
+      try {
+        const gasPrice = await smartWallet.client.request({
+          method: "pimlico_getUserOperationGasPrice" as never,
+        } as never);
+        resolvedMaxFeePerGas = BigInt((gasPrice as any).fast.maxFeePerGas);
+        resolvedMaxPriorityFeePerGas = BigInt((gasPrice as any).fast.maxPriorityFeePerGas);
+      } catch {
+        const fees = await this.publicClient.estimateFeesPerGas();
+        resolvedMaxFeePerGas = resolvedMaxFeePerGas ?? fees.maxFeePerGas ?? 0n;
+        resolvedMaxPriorityFeePerGas = resolvedMaxPriorityFeePerGas ?? fees.maxPriorityFeePerGas ?? 0n;
+      }
+    }
     // calculate smart wallet address via Factory contract to know the sender
     const { account, publicKey } = await this._calculateSmartWalletAddress(keyId); // the keyId is the id tied to the user's public key
 
@@ -79,8 +105,8 @@ export class UserOpBuilder {
       ({ initCode, initCodeGas } = await this._createInitCode(publicKey));
     }
 
-    // calculate nonce
-    const nonce = await this._getNonce(account);
+    // calculate nonce (or use caller-provided nonce to avoid cross-RPC lag issues)
+    const resolvedNonce = nonce ?? (await this._getNonce(account));
 
     // create callData
     const callData = this._addCallData(calls);
@@ -89,26 +115,60 @@ export class UserOpBuilder {
     const userOp: UserOperation = {
       ...DEFAULT_USER_OP,
       sender: account,
-      nonce,
+      nonce: resolvedNonce,
       initCode,
       callData,
-      maxFeePerGas,
-      maxPriorityFeePerGas,
+      maxFeePerGas: resolvedMaxFeePerGas!,
+      maxPriorityFeePerGas: resolvedMaxPriorityFeePerGas!,
     };
 
     // estimate gas for this partial user operation
     // real good article about the subject can be found here:
     // https://www.alchemy.com/blog/erc-4337-gas-estimation
-    const { callGasLimit, verificationGasLimit, preVerificationGas } =
-      await smartWallet.estimateUserOperationGas({
-        userOp: this.toParams(userOp),
-      });
+    let callGasLimit: Hex;
+    let verificationGasLimit: Hex;
+    let preVerificationGas: Hex;
 
-    // set gas limits with the estimated values + some extra gas for safety
+    try {
+      ({ callGasLimit, verificationGasLimit, preVerificationGas } =
+        await smartWallet.estimateUserOperationGas({
+          userOp: this.toParams(userOp),
+        }));
+    } catch (error: any) {
+      const estimateMessage = error?.message || "";
+      if (typeof estimateMessage === "string" && estimateMessage.includes("AA21")) {
+        throw new Error("Smart wallet has insufficient ETH for user-op prefund (AA21). Please top up ETH and retry.");
+      }
+
+      // Retry once with larger placeholders for bundlers that are strict during simulation.
+      userOp.callGasLimit = BigInt(2_000_000);
+      userOp.verificationGasLimit = BigInt(2_000_000);
+      userOp.preVerificationGas = BigInt(200_000);
+
+      ({ callGasLimit, verificationGasLimit, preVerificationGas } =
+        await smartWallet.estimateUserOperationGas({
+          userOp: this.toParams(userOp),
+        }));
+    }
+
+    // set gas limits with buffered values
     userOp.callGasLimit = BigInt(callGasLimit);
-    userOp.preVerificationGas = BigInt(preVerificationGas) * BigInt(10);
-    userOp.verificationGasLimit =
-      BigInt(verificationGasLimit) + BigInt(150_000) + BigInt(initCodeGas) + BigInt(1_000_000);
+    // preVerificationGas from simulation is often low because final signature payload is added later.
+    // Add both a percentage and fixed buffer to avoid "preVerificationGas is not enough" rejections.
+    const estimatedPreVerificationGas = BigInt(preVerificationGas);
+    const bufferedPreVerificationGas = (estimatedPreVerificationGas * BigInt(12)) / BigInt(10) + BigInt(25_000);
+    const MINIMUM_PRE_VERIFICATION_GAS = BigInt(65_000);
+    userOp.preVerificationGas =
+      bufferedPreVerificationGas > MINIMUM_PRE_VERIFICATION_GAS
+        ? bufferedPreVerificationGas
+        : MINIMUM_PRE_VERIFICATION_GAS;
+    // P256/WebAuthn (secp256r1) verification costs 300k-350k gas on EVM without RIP-7212 precompile.
+    // The bundler estimates with a dummy zero-signature so the on-chain sig check is skipped.
+    // We must add a large buffer to cover the real signature verification cost.
+    const estimatedVerification = BigInt(verificationGasLimit) + BigInt(initCodeGas);
+    const withBuffer = estimatedVerification + BigInt(400_000);
+    const MINIMUM_VERIFICATION_GAS = BigInt(500_000);
+    userOp.verificationGasLimit = withBuffer > MINIMUM_VERIFICATION_GAS ? withBuffer : MINIMUM_VERIFICATION_GAS;
 
     // get userOp hash (with signature == 0x) by calling the entry point contract
     const userOpHash = await this._getUserOpHash(userOp);
@@ -188,7 +248,7 @@ export class UserOpBuilder {
           [
             {
               authenticatorData: credentials.authenticatorData,
-              clientDataJSON: JSON.stringify(credentials.clientData).replace(/ /g, ""),
+              clientDataJSON: credentials.rawClientDataJSON,
               challengeLocation: BigInt(23),
               responseTypeLocation: BigInt(1),
               r: BigInt(credentials.signature.r),
@@ -200,6 +260,11 @@ export class UserOpBuilder {
     );
 
     return signature;
+  }
+
+  public async getSenderAddress(keyId: Hex): Promise<Address> {
+    const { account } = await this._calculateSmartWalletAddress(keyId);
+    return account;
   }
 
   private async _createInitCode(

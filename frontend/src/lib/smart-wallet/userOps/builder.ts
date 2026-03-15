@@ -32,7 +32,7 @@ export class UserOpBuilder {
   constructor(chain: Chain) {
     this.chain = chain;
     const rpcUrl = process.env.NEXT_PUBLIC_RPC_ENDPOINT || "https://ethereum-sepolia-rpc.publicnode.com";
-    
+
     this.publicClient = createPublicClient({
       chain,
       transport: http(rpcUrl),
@@ -60,10 +60,27 @@ export class UserOpBuilder {
     keyId,
   }: {
     calls: Call[];
-    maxFeePerGas: bigint;
-    maxPriorityFeePerGas: bigint;
+    maxFeePerGas?: bigint;
+    maxPriorityFeePerGas?: bigint;
     keyId: Hex;
   }): Promise<UserOperationAsHex> {
+    // 0. Resolve gas prices if not provided
+    let resolvedMaxFeePerGas = maxFeePerGas;
+    let resolvedMaxPriorityFeePerGas = maxPriorityFeePerGas;
+
+    if (!resolvedMaxFeePerGas || !resolvedMaxPriorityFeePerGas) {
+      try {
+        const gasPrice = await smartWallet.client.request({
+          method: "pimlico_getUserOperationGasPrice" as never,
+        } as never);
+        resolvedMaxFeePerGas = BigInt((gasPrice as any).fast.maxFeePerGas);
+        resolvedMaxPriorityFeePerGas = BigInt((gasPrice as any).fast.maxPriorityFeePerGas);
+      } catch {
+        const fees = await this.publicClient.estimateFeesPerGas();
+        resolvedMaxFeePerGas = resolvedMaxFeePerGas ?? fees.maxFeePerGas ?? 0n;
+        resolvedMaxPriorityFeePerGas = resolvedMaxPriorityFeePerGas ?? fees.maxPriorityFeePerGas ?? 0n;
+      }
+    }
     // calculate smart wallet address via Factory contract to know the sender
     const { account, publicKey } = await this._calculateSmartWalletAddress(keyId); // the keyId is the id tied to the user's public key
 
@@ -93,8 +110,8 @@ export class UserOpBuilder {
       nonce,
       initCode,
       callData,
-      maxFeePerGas,
-      maxPriorityFeePerGas,
+      maxFeePerGas: resolvedMaxFeePerGas!,
+      maxPriorityFeePerGas: resolvedMaxPriorityFeePerGas!,
     };
 
     // estimate gas for this partial user operation
@@ -105,11 +122,16 @@ export class UserOpBuilder {
         userOp: this.toParams(userOp),
       });
 
-    // set gas limits with the estimated values + some extra gas for safety
+    // set gas limits with the estimated values
     userOp.callGasLimit = BigInt(callGasLimit);
-    userOp.preVerificationGas = BigInt(preVerificationGas) * BigInt(10);
-    userOp.verificationGasLimit =
-      BigInt(verificationGasLimit) + BigInt(150_000) + BigInt(initCodeGas) + BigInt(1_000_000);
+    userOp.preVerificationGas = BigInt(preVerificationGas);
+    // P256/WebAuthn (secp256r1) verification costs 300k-350k gas on EVM without RIP-7212 precompile.
+    // The bundler estimates with a dummy zero-signature so the on-chain sig check is skipped.
+    // We must add a large buffer to cover the real signature verification cost.
+    const estimatedVerification = BigInt(verificationGasLimit) + BigInt(initCodeGas);
+    const withBuffer = estimatedVerification + BigInt(400_000);
+    const MINIMUM_VERIFICATION_GAS = BigInt(500_000);
+    userOp.verificationGasLimit = withBuffer > MINIMUM_VERIFICATION_GAS ? withBuffer : MINIMUM_VERIFICATION_GAS;
 
     // get userOp hash (with signature == 0x) by calling the entry point contract
     const userOpHash = await this._getUserOpHash(userOp);

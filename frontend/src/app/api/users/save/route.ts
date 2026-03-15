@@ -1,7 +1,10 @@
 import { CHAIN, PUBLIC_CLIENT, transport } from "@/config/constants";
 import { FACTORY_ABI } from "@/config/constants/factory";
-import { Hex, createWalletClient, toHex, zeroAddress } from "viem";
+import { Hex, createWalletClient, parseEther, toHex, zeroAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+
+const MIN_BALANCE_WEI = parseEther("0.002");
+const TARGET_BALANCE_WEI = parseEther("0.004");
 
 export async function POST(req: Request) {
   const { id, pubKey } = (await req.json()) as { id: Hex; pubKey: [Hex, Hex] };
@@ -21,6 +24,15 @@ export async function POST(req: Request) {
   });
 
   if (user.account !== zeroAddress) {
+    const currentBalance = await PUBLIC_CLIENT.getBalance({ address: user.account });
+    if (currentBalance < MIN_BALANCE_WEI) {
+      const topUpAmount = TARGET_BALANCE_WEI - currentBalance;
+      await walletClient.sendTransaction({
+        to: user.account,
+        value: topUpAmount,
+      });
+    }
+
     return Response.json({
       id,
       account: user.account,
@@ -44,7 +56,7 @@ export async function POST(req: Request) {
 
   await walletClient.sendTransaction({
     to: smartWalletAddress,
-    value: BigInt(1),
+    value: TARGET_BALANCE_WEI,
   });
 
   const createdUser = {

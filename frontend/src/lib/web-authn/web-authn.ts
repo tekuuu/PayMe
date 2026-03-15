@@ -159,6 +159,7 @@ export class WebAuthn {
 
     return {
       rawId: toHex(new Uint8Array(cred.rawId)),
+      rawClientDataJSON: decodedClientData, // exact original bytes — needed for signature verification
       clientData: {
         type: clientDataObj.type,
         challenge: clientDataObj.challenge,
@@ -174,7 +175,7 @@ export class WebAuthn {
 // Parse the signature from the authenticator and remove the leading zero if necessary
 export function parseSignature(signature: Uint8Array): P256Signature {
   const parsedSig = AsnParser.parse(signature, ECDSASigValue);
-  
+
   // R and S should be 32 bytes each. ASN.1 parsing might return them with 
   // leading zeros if they are positive and have the MSB set.
   // We need to exactly pad or slice them to 32 bytes.

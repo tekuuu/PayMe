@@ -51,9 +51,6 @@ class SmartWallet {
   }
 
   public get client() {
-    console.warn(
-      "smartWallet: isInit() is not called. Only use this getter if you want to access wagmi publicClient method.",
-    );
     return this._client;
   }
 
