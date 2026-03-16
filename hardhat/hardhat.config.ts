@@ -9,8 +9,9 @@ import type { HardhatUserConfig } from "hardhat/config";
 import { vars } from "hardhat/config";
 import "solidity-coverage";
 import * as dotenv from "dotenv";
+import path from "path";
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, ".env") });
 
 // import "./tasks/accounts";
 // import "./tasks/FHECounter";
