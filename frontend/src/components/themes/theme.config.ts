@@ -2,15 +2,15 @@
  * Default theme that loads when no user preference is set
  * Change this value to set a different default theme
  */
-export const DEFAULT_THEME = 'payme';
+export const DEFAULT_THEME = 'claude';
 
 export const THEMES = [
   {
-    name: 'PayMe (Default)',
+    name: 'PayMe',
     value: 'payme'
   },
   {
-    name: 'Claude',
+    name: 'Claude (Default)',
     value: 'claude'
   },
   {

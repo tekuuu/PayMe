@@ -6,6 +6,7 @@ import { WebAuthn } from "@/lib/web-authn/web-authn";
 import { saveUser } from "@/lib/factory";
 import { getUser } from "@/lib/factory/getUser";
 import { useWalletConnect } from "@/lib/smart-wallet/SmartWalletProvider";
+import { toast } from "sonner";
 
 export type Me = {
   account: Address;
@@ -62,8 +63,9 @@ function useMeHook() {
       init(me.account);
       setIsReturning(true);
       setMe(me);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      toast.error(e?.message || "Failed to create wallet.");
     } finally {
       setIsLoading(false);
     }
@@ -94,10 +96,11 @@ function useMeHook() {
       init(me.account);
       setIsReturning(true);
       setMe(me);
-    } catch (e) {
+    } catch (e: any) {
       localStorage.removeItem("passkeys4337.returning");
       disconnect();
       console.error(e);
+      toast.error(e?.message || "Failed to access wallet.");
     } finally {
       setIsLoading(false);
     }

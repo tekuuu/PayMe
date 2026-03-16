@@ -8,7 +8,7 @@ import {
   useState
 } from 'react';
 
-import { DEFAULT_THEME } from './theme.config';
+import { DEFAULT_THEME, THEMES } from './theme.config';
 
 const COOKIE_NAME = 'active_theme';
 
@@ -32,7 +32,18 @@ export function ActiveThemeProvider({
   children: ReactNode;
   initialTheme?: string;
 }) {
-  const themeToUse = initialTheme || DEFAULT_THEME;
+  const validThemes = new Set(THEMES.map((theme) => theme.value));
+
+  const normalizedInitialTheme =
+    initialTheme === 'merces' || initialTheme === 'payme'
+      ? 'claude'
+      : initialTheme;
+
+  const themeToUse =
+    normalizedInitialTheme && validThemes.has(normalizedInitialTheme)
+      ? normalizedInitialTheme
+      : DEFAULT_THEME;
+
   const [activeTheme, setActiveTheme] = useState<string>(themeToUse);
 
   useEffect(() => {
