@@ -8,7 +8,7 @@
 
 @layer base {
   html {
-    font-size: 135%;
+    font-size: 100%;
   }
 
   /* ... existing layer base ... */
