@@ -125,9 +125,12 @@ export class UserOpBuilder {
     // estimate gas for this partial user operation
     // real good article about the subject can be found here:
     // https://www.alchemy.com/blog/erc-4337-gas-estimation
-    let callGasLimit: Hex;
-    let verificationGasLimit: Hex;
-    let preVerificationGas: Hex;
+    let callGasLimit: Hex | bigint;
+    let verificationGasLimit: Hex | bigint;
+    let preVerificationGas: Hex | bigint;
+
+    const toBigIntGas = (value: Hex | bigint): bigint =>
+      typeof value === "bigint" ? value : BigInt(value);
 
     try {
       ({ callGasLimit, verificationGasLimit, preVerificationGas } =
@@ -152,10 +155,10 @@ export class UserOpBuilder {
     }
 
     // set gas limits with buffered values
-    userOp.callGasLimit = BigInt(callGasLimit);
+    userOp.callGasLimit = toBigIntGas(callGasLimit);
     // preVerificationGas from simulation is often low because final signature payload is added later.
     // Add both a percentage and fixed buffer to avoid "preVerificationGas is not enough" rejections.
-    const estimatedPreVerificationGas = BigInt(preVerificationGas);
+    const estimatedPreVerificationGas = toBigIntGas(preVerificationGas);
     const bufferedPreVerificationGas = (estimatedPreVerificationGas * BigInt(12)) / BigInt(10) + BigInt(25_000);
     const MINIMUM_PRE_VERIFICATION_GAS = BigInt(65_000);
     userOp.preVerificationGas =
@@ -165,7 +168,7 @@ export class UserOpBuilder {
     // P256/WebAuthn (secp256r1) verification costs 300k-350k gas on EVM without RIP-7212 precompile.
     // The bundler estimates with a dummy zero-signature so the on-chain sig check is skipped.
     // We must add a large buffer to cover the real signature verification cost.
-    const estimatedVerification = BigInt(verificationGasLimit) + BigInt(initCodeGas);
+    const estimatedVerification = toBigIntGas(verificationGasLimit) + BigInt(initCodeGas);
     const withBuffer = estimatedVerification + BigInt(400_000);
     const MINIMUM_VERIFICATION_GAS = BigInt(500_000);
     userOp.verificationGasLimit = withBuffer > MINIMUM_VERIFICATION_GAS ? withBuffer : MINIMUM_VERIFICATION_GAS;
@@ -354,7 +357,7 @@ export class UserOpBuilder {
       address: this.entryPoint,
       abi: ENTRYPOINT_ABI,
       functionName: "getUserOpHash",
-      args: [this.toParams(userOp)],
+      args: [userOp],
     });
     return userOpHash;
   }

@@ -86,7 +86,7 @@ class WalletConnect extends EventEmitter {
     });
 
     this._web3wallet = await Web3Wallet.init({
-      core,
+      core: core as any,
       metadata: walletConnectConfig.metadata,
     });
 

@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useMemo } from 'react';
 import { useAccount, useWalletClient } from 'wagmi';
-import { useFhevm, useInMemoryStorage, FhevmInstance } from '@/lib/fhevm-sdk/react';
+import { useFhevm } from '@/lib/fhevm-sdk/react';
+import type { FhevmInstance } from '@/lib/fhevm-sdk/fhevmTypes';
 import { CHAIN } from '@/config/constants';
 
 interface FhevmContextType {

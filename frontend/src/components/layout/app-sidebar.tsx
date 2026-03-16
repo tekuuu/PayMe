@@ -27,6 +27,7 @@ import { useMediaQuery } from '@/hooks/use-media-query';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import React from 'react';
+import { IconChevronRight } from '@tabler/icons-react';
 import { Icons } from '../icons';
 
 export default function AppSidebar() {
