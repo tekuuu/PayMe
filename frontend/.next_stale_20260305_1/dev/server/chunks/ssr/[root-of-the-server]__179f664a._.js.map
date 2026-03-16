@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 26, "column": 0}, "map": {"version":3,"sources":["file:///home/zoe/Documents/zama/PayMe/frontend/src/app/page.tsx"],"sourcesContent":["import { redirect } from 'next/navigation';\n\nexport default async function Page() {\n  redirect('/dashboard');\n}\n"],"names":[],"mappings":";;;;AAAA;AAAA;;AAEe,eAAe;IAC5B,IAAA,2OAAQ,EAAC;AACX"}}]
-}
