@@ -2,8 +2,8 @@ import { CHAIN, PUBLIC_CLIENT, transport } from "@/config/constants";
 import { Hex, createWalletClient, parseEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-const MIN_BALANCE_WEI = parseEther("0.002");
-const TARGET_BALANCE_WEI = parseEther("0.004");
+const TARGET_BALANCE_WEI = parseEther("0.00009");
+const MIN_BALANCE_WEI = TARGET_BALANCE_WEI;
 
 export async function POST(req: Request) {
   try {

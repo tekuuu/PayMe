@@ -3,8 +3,8 @@ import { FACTORY_ABI } from "@/config/constants/factory";
 import { Hex, createWalletClient, parseEther, toHex, zeroAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-const MIN_BALANCE_WEI = parseEther("0.002");
-const TARGET_BALANCE_WEI = parseEther("0.004");
+const TARGET_BALANCE_WEI = parseEther("0.00009");
+const MIN_BALANCE_WEI = TARGET_BALANCE_WEI;
 
 export async function POST(req: Request) {
   const { id, pubKey } = (await req.json()) as { id: Hex; pubKey: [Hex, Hex] };
