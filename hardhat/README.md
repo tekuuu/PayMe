@@ -1,110 +1,54 @@
-# FHEVM Hardhat Template
+# PayMe Smart Contracts (FHE + AA)
 
-A Hardhat-based template for developing Fully Homomorphic Encryption (FHE) enabled Solidity smart contracts using the
-FHEVM protocol by Zama.
+This directory contains the Solidity smart contracts powering the **PayMe** experience, heavily utilizing the **`@fhevm/solidity`** library for state encryption and mathematical calculation over ciphertexts.
 
-## Quick Start
+## 🏗️ Contracts Overview
 
-For detailed instructions see:
-[FHEVM Hardhat Quick Start Tutorial](https://docs.zama.ai/protocol/solidity-guides/getting-started/quick-start-tutorial)
+1. **`PrivateCard.sol`**: This is the core "Vault/Card" contract deployed for each user.
+   - Holds an encrypted `cUSDC` balance securely.
+   - Allows users to approve recurring Subscriptions using homomorphic conditionals.
+   - Features `syncBalanceAcl()` utilizing Zama's `FHE.allow` mechanism to safely transfer ciphertext reading rights between the card itself, the owner, and the frontend decryption relayers.
+2. **`CardFactory.sol`**: A lightweight deterministic factory enabling the frontend client to map deterministic user addresses to individual deployed `PrivateCard` contracts seamlessly.
+3. **`CustomWrapper.sol`**: Confidential ERC-20 token scaffolding for local debugging, wrapping plain `USDC` into `cUSDC` (Confidential USDC).
+
+## ⚙️ Development & Deployment
+
+The contract suite is managed through the Hardhat framework configuration.
 
 ### Prerequisites
 
-- **Node.js**: Version 20 or higher
-- **npm or yarn/pnpm**: Package manager
+\`\`\`bash
+npm install
+\`\`\`
 
-### Installation
+You must configure an `.env` file within the `/hardhat` directory:
 
-1. **Install dependencies**
+\`\`\`env
+# Infrastructure Providers
+INFURA_API_KEY="YOUR_INFURA_KEY"
+PRIVATE_KEY="YOUR_DEPLOYER_PRIVATE_KEY"
 
-   ```bash
-   npm install
-   ```
+# Zama Setup
+CUSDC_WRAPPER_ADDRESS="0x..." # Reference to fhEVM Confidential USDC wrapper
+\`\`\`
 
-2. **Set up environment variables**
+### Compilation
 
-   ```bash
-   npx hardhat vars set MNEMONIC
+Because `@fhevm/solidity` has specific EVM version compilation rules to support precompiles like `TFHE`, ensure you run compilation carefully:
 
-   # Set your Infura API key for network access
-   npx hardhat vars set INFURA_API_KEY
+\`\`\`bash
+npx hardhat compile
+\`\`\`
 
-   # Optional: Set Etherscan API key for contract verification
-   npx hardhat vars set ETHERSCAN_API_KEY
-   ```
+### Deployment
 
-3. **Compile and test**
+Deploy to the fhEVM Coprocessor network (or standard testnets using the Coprocessor):
 
-   ```bash
-   npm run compile
-   npm run test
-   ```
+\`\`\`bash
+npx hardhat run deploy/002_deploy_card_factory.ts --network sepolia
+\`\`\`
 
-4. **Deploy to local network**
+Once deployed, copy the new Factory address into the frontend `.env.local` as `NEXT_PUBLIC_PRIVATE_CARD_FACTORY_ADDRESS`.
 
-   ```bash
-   # Start a local FHEVM-ready node
-   npx hardhat node
-   # Deploy to local network
-   npx hardhat deploy --network localhost
-   ```
-
-5. **Deploy to Sepolia Testnet**
-
-   ```bash
-   # Deploy to Sepolia
-   npx hardhat deploy --network sepolia
-   # Verify contract on Etherscan
-   npx hardhat verify --network sepolia <CONTRACT_ADDRESS>
-   ```
-
-6. **Test on Sepolia Testnet**
-
-   ```bash
-   # Once deployed, you can run a simple test on Sepolia.
-   npx hardhat test --network sepolia
-   ```
-
-## 📁 Project Structure
-
-```
-fhevm-hardhat-template/
-├── contracts/           # Smart contract source files
-│   └── FHECounter.sol   # Example FHE counter contract
-├── deploy/              # Deployment scripts
-├── tasks/               # Hardhat custom tasks
-├── test/                # Test files
-├── hardhat.config.ts    # Hardhat configuration
-└── package.json         # Dependencies and scripts
-```
-
-## 📜 Available Scripts
-
-| Script             | Description              |
-| ------------------ | ------------------------ |
-| `npm run compile`  | Compile all contracts    |
-| `npm run test`     | Run all tests            |
-| `npm run coverage` | Generate coverage report |
-| `npm run lint`     | Run linting checks       |
-| `npm run clean`    | Clean build artifacts    |
-
-## 📚 Documentation
-
-- [FHEVM Documentation](https://docs.zama.ai/fhevm)
-- [FHEVM Hardhat Setup Guide](https://docs.zama.ai/protocol/solidity-guides/getting-started/setup)
-- [FHEVM Testing Guide](https://docs.zama.ai/protocol/solidity-guides/development-guide/hardhat/write_test)
-- [FHEVM Hardhat Plugin](https://docs.zama.ai/protocol/solidity-guides/development-guide/hardhat)
-
-## 📄 License
-
-This project is licensed under the BSD-3-Clause-Clear License. See the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-- **GitHub Issues**: [Report bugs or request features](https://github.com/zama-ai/fhevm/issues)
-- **Documentation**: [FHEVM Docs](https://docs.zama.ai)
-- **Community**: [Zama Discord](https://discord.gg/zama)
-
----
-
-**Built with ❤️ by the Zama team**
+### Updating the ABI
+When you modify `PrivateCard.sol`, be sure to copy the `artifacts/contracts/PrivateCard.sol/PrivateCard.json` into the Next.js `constants` or use the deployment ABI sync script if configured.

@@ -11,10 +11,10 @@ import {
 import { SmartWalletActions, smartWalletActions } from "./decorators";
 import { transport } from "../config";
 import { ERC4337RpcSchema, UserOperationAsHex } from "@/lib/smart-wallet/service/userOps";
-import { CHAIN } from "@/config/constants";
+import { CHAIN, ENTRYPOINT_ABI, ENTRYPOINT_ADDRESS } from "@/config/constants";
 import { EstimateUserOperationGasReturnType } from "@/lib/smart-wallet/service/actions";
-import { Hex, encodePacked, encodeAbiParameters } from "viem";
-import { P256Credential, WebAuthn } from "@/lib/web-authn/web-authn";
+import { Hex, encodePacked, encodeAbiParameters, getContract, http, Address } from "viem";
+import { WebAuthn } from "@/lib/web-authn/web-authn";
 
 export type SmartWalletClient<chain extends Chain | undefined = Chain | undefined> = Client<
   Transport,
@@ -38,11 +38,18 @@ export const createSmartWalletClient = (parameters: PublicClientConfig): SmartWa
 class SmartWallet {
   private _client: SmartWalletClient;
   private _isInitiated: boolean = false;
+  private _publicClient: PublicClient;
 
   constructor() {
     this._client = createSmartWalletClient({
       chain: CHAIN,
       transport,
+    });
+    
+    const rpcUrl = process.env.NEXT_PUBLIC_RPC_ENDPOINT || "https://ethereum-sepolia-rpc.publicnode.com";
+    this._publicClient = createPublicClient({
+      chain: CHAIN,
+      transport: http(rpcUrl),
     });
   }
 
@@ -54,10 +61,51 @@ class SmartWallet {
     return this._client;
   }
 
-  public async sendUserOperation(args: { userOp: UserOperationAsHex }): Promise<`0x${string}`> {
+  private _isInit() {
+    if (!this._isInitiated) {
+      throw new Error("Smart Wallet Client not initiated");
+    }
+  }
+
+  public async sendUserOperation(args: { userOp: UserOperationAsHex }): Promise<Hash> {
     this._isInit();
+
+    const entryPoint = getContract({
+      address: ENTRYPOINT_ADDRESS,
+      abi: ENTRYPOINT_ABI,
+      client: this._publicClient,
+    });
+
+    const userOpForHash = {
+      sender: args.userOp.sender as Address,
+      nonce: BigInt(args.userOp.nonce),
+      initCode: args.userOp.initCode as Hex,
+      callData: args.userOp.callData as Hex,
+      callGasLimit: BigInt(args.userOp.callGasLimit),
+      verificationGasLimit: BigInt(args.userOp.verificationGasLimit),
+      preVerificationGas: BigInt(args.userOp.preVerificationGas),
+      maxFeePerGas: BigInt(args.userOp.maxFeePerGas),
+      maxPriorityFeePerGas: BigInt(args.userOp.maxPriorityFeePerGas),
+      paymasterAndData: args.userOp.paymasterAndData as Hex,
+      signature: "0x" as Hex,
+    };
+
+    const userOpHash = await entryPoint.read.getUserOpHash([userOpForHash]);
+
+    // The contract verification actually packs the version (1) and validUntil (0)
+    // with the userOpHash before verifying the signature. We MUST sign this packed message.
+    const messageToVerify = encodePacked(
+      ["uint8", "uint48", "bytes32"],
+      [1, 0, userOpHash as Hex]
+    );
+
+    const signature = await this.getSignature(messageToVerify);
+
     return await this._client.sendUserOperation({
-      ...args,
+      userOp: {
+        ...args.userOp,
+        signature,
+      },
     });
   }
 
@@ -70,7 +118,7 @@ class SmartWallet {
     });
   }
 
-  public async getUserOperationReceipt(args: { hash: Hash }): Promise<`0x${string}`> {
+  public async getUserOperationReceipt(args: { hash: Hash }): Promise<any> {
     this._isInit();
     return await this._client.getUserOperationReceipt({
       ...args,
@@ -91,16 +139,18 @@ class SmartWallet {
     });
   }
 
-  public async getSignature(msgToSign: Hex, keyId: Hex): Promise<Hex> {
-    const credentials: P256Credential = (await WebAuthn.get(msgToSign)) as P256Credential;
+  public async getSignature(msgToSign: Hex): Promise<Hex> {
+    const credentials = (await WebAuthn.get(msgToSign)) as any;
 
-    if (credentials.rawId !== keyId) {
-      throw new Error(
-        "Incorrect passkeys used for tx signing. Please sign the transaction with the correct logged-in account",
-      );
-    }
+    // Use exactly the raw original client data JSON string returned by the authenticator
+    const clientDataJSON = credentials.rawClientDataJSON as string;
+    
+    // Find the exact byte offset indices inside the raw JSON string
+    // This perfectly aligns with how `WebAuthn.sol` uses the `contains` method on-chain
+    const challengePos = clientDataJSON.indexOf('"challenge":"');
+    const typePos = clientDataJSON.indexOf('"type":"webauthn.get"');
 
-    const signature = encodePacked(
+    return encodePacked(
       ["uint8", "uint48", "bytes"],
       [
         1,
@@ -111,56 +161,28 @@ class SmartWallet {
               type: "tuple",
               name: "credentials",
               components: [
-                {
-                  name: "authenticatorData",
-                  type: "bytes",
-                },
-                {
-                  name: "clientDataJSON",
-                  type: "string",
-                },
-                {
-                  name: "challengeLocation",
-                  type: "uint256",
-                },
-                {
-                  name: "responseTypeLocation",
-                  type: "uint256",
-                },
-                {
-                  name: "r",
-                  type: "uint256",
-                },
-                {
-                  name: "s",
-                  type: "uint256",
-                },
+                { name: "authenticatorData", type: "bytes" },
+                { name: "clientDataJSON", type: "string" },
+                { name: "challengeLocation", type: "uint256" },
+                { name: "responseTypeLocation", type: "uint256" },
+                { name: "r", type: "uint256" },
+                { name: "s", type: "uint256" },
               ],
             },
           ],
           [
             {
-              authenticatorData: credentials.authenticatorData,
-              clientDataJSON: JSON.stringify(credentials.clientData).replace(/ /g, ""),
-              challengeLocation: BigInt(23),
-              responseTypeLocation: BigInt(1),
+              authenticatorData: credentials.authenticatorData as Hex,
+              clientDataJSON: clientDataJSON,
+              challengeLocation: BigInt(challengePos),
+              responseTypeLocation: BigInt(typePos),
               r: BigInt(credentials.signature.r),
               s: BigInt(credentials.signature.s),
             },
-          ],
+          ]
         ),
-      ],
+      ]
     );
-
-    return signature;
-  }
-
-  private _isInit() {
-    if (this._isInitiated) {
-      return true;
-    } else {
-      throw new Error("SmartWallet is not initialized");
-    }
   }
 }
 

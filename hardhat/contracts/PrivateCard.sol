@@ -21,6 +21,7 @@ contract PrivateCard is ZamaEthereumConfig {
     }
 
     mapping(address => Subscription) public subscriptions;
+    euint64 public mySyncedBalance;
 
     event ConfidentialTransfer(address indexed to, euint64 amount);
     event SubscriptionApproved(address merchant, euint64 maxPerPeriod);
@@ -53,13 +54,15 @@ contract PrivateCard is ZamaEthereumConfig {
     // ── Approve subscription limit (only wallet) ────────────────────────────────
     function approveSubscription(
         address merchant,
-        euint64 encryptedMaxPerPeriod,
+        uint256 encryptedMaxPerPeriod,
         uint256 periodSeconds
     ) external {
         require(msg.sender == owner, "Only wallet");
 
+        euint64 val = euint64.wrap(bytes32(encryptedMaxPerPeriod));
+
         subscriptions[merchant] = Subscription({
-            maxPerPeriod: encryptedMaxPerPeriod,
+            maxPerPeriod: val,
             spentThisPeriod: FHE.asEuint64(0),
             periodSeconds: periodSeconds,
             lastReset: block.timestamp
@@ -68,7 +71,7 @@ contract PrivateCard is ZamaEthereumConfig {
         FHE.allowThis(subscriptions[merchant].maxPerPeriod);
         FHE.allowThis(subscriptions[merchant].spentThisPeriod);
 
-        emit SubscriptionApproved(merchant, encryptedMaxPerPeriod);
+        emit SubscriptionApproved(merchant, val);
     }
 
     // ── Merchant pulls subscription payment ─────────────────────────────────────
@@ -112,7 +115,7 @@ contract PrivateCard is ZamaEthereumConfig {
     // ── View encrypted balance (only owner) ─────────────────────────────────────
     function getEncryptedBalance() external view returns (euint64) {
         require(msg.sender == owner, "Only wallet");
-        return IERC7984(cUSDC).confidentialBalanceOf(address(this));
+        return mySyncedBalance;
     }
 
 
@@ -129,8 +132,13 @@ contract PrivateCard is ZamaEthereumConfig {
 
     function _syncBalanceAclFor(address grantee) internal {
         euint64 currentBalance = IERC7984(cUSDC).confidentialBalanceOf(address(this));
-        FHE.allow(currentBalance, grantee);
-        FHE.allowThis(currentBalance);
+        if (FHE.isInitialized(currentBalance)) {
+            mySyncedBalance = FHE.add(currentBalance, FHE.asEuint64(0));
+        } else {
+            mySyncedBalance = FHE.asEuint64(0);
+        }
+        FHE.allow(mySyncedBalance, grantee);
+        FHE.allowThis(mySyncedBalance);
         emit BalanceAclSynced(grantee);
     }
 }

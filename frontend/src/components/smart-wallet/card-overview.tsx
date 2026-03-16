@@ -6,7 +6,8 @@ import {
     IconEye,
     IconCopy,
     IconWallet,
-    IconSend
+    IconSend,
+    IconCreditCard
 } from '@tabler/icons-react';
 import { Hex, encodeFunctionData, parseUnits, toHex } from 'viem';
 import { toast } from 'sonner';

@@ -18,6 +18,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { AlertCircle, Send, CheckCircle2 } from 'lucide-react';
+import { IconCoins, IconWallet, IconHistory } from '@tabler/icons-react';
 import { encodeFunctionData, Hex, isAddress, parseEther, parseUnits, zeroAddress } from 'viem';
 import { toast } from 'sonner';
 
@@ -219,108 +220,140 @@ export function SendTokenCard({ me }: { me: Me }) {
   }
 
   return (
-    <Card className='max-w-xl border'>
-      <CardHeader className="pb-2">
-        <CardTitle className='flex items-center gap-2 text-lg'>
-          <Send className='h-4 w-4' />
+    <Card className='w-full border-primary/10 bg-gradient-to-b from-background to-muted/20 relative overflow-hidden shadow-md dark:shadow-primary/5'>
+      <div className="absolute top-0 right-0 p-6 opacity-[0.03] pointer-events-none transition-opacity group-hover:opacity-10 text-primary">
+        <Send size={140} />
+      </div>
+      <CardHeader className="pb-4 relative z-10">
+        <CardTitle className='flex items-center gap-2 text-xl font-semibold'>
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Send className='h-5 w-5' />
+          </div>
           Send Payment
         </CardTitle>
-        <CardDescription className="text-xs">Send ETH, USDC, or WETH from your smart card wallet.</CardDescription>
+        <CardDescription className="text-sm">Send your funds securely from your smart card wallet.</CardDescription>
       </CardHeader>
-      <CardContent>
-        <form onSubmit={onSubmit} className='space-y-3'>
-          <div className='space-y-2'>
-            <Label htmlFor='token'>Token</Label>
-            <Select value={tokenSymbol} onValueChange={(value) => setTokenSymbol(value as TokenOption['symbol'])}>
-              <SelectTrigger id='token'>
-                <SelectValue placeholder='Select token' />
-              </SelectTrigger>
-              <SelectContent>
-                {TOKENS.map((token) => {
-                  const raw =
-                    token.symbol === 'ETH'
-                      ? (balances.eth.balance as bigint | undefined)
-                      : token.symbol === 'USDC'
-                        ? (balances.usdc.balance as bigint | undefined)
-                        : (balances.weth.balance as bigint | undefined);
-                  const hasBalance = Boolean(raw && raw > 0n);
-                  const balanceLabel = formatBalanceDisplay(raw, token.decimals);
+      <CardContent className="relative z-10">
+        <form onSubmit={onSubmit} className='space-y-4'>
+          <div className='spacing-y-1.5'>
+            <Label htmlFor='token' className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-1.5 block">Asset</Label>
+            <div className="bg-muted/30 p-1 rounded-lg border shadow-inner">
+              <Select value={tokenSymbol} onValueChange={(value) => setTokenSymbol(value as TokenOption['symbol'])}>
+                <SelectTrigger id='token' className="border-0 bg-transparent shadow-none focus:ring-0 font-medium h-9">
+                  <SelectValue placeholder='Select token' />
+                </SelectTrigger>
+                <SelectContent>
+                  {TOKENS.map((token) => {
+                    const raw =
+                      token.symbol === 'ETH'
+                        ? (balances.eth.balance as bigint | undefined)
+                        : token.symbol === 'USDC'
+                          ? (balances.usdc.balance as bigint | undefined)
+                          : (balances.weth.balance as bigint | undefined);
+                    const hasBalance = Boolean(raw && raw > 0n);
+                    const balanceLabel = formatBalanceDisplay(raw, token.decimals);
 
-                  return (
-                    <SelectItem key={token.symbol} value={token.symbol} disabled={!hasBalance && token.symbol !== 'ETH'}>
-                      {token.symbol} ({balanceLabel})
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-            <p className='text-[10px] text-muted-foreground opacity-80'>Available: {selectedBalanceLabel} {selectedToken.symbol} | Gas: {formatBalanceDisplay(ethBalanceRaw, 18)} ETH</p>
+                    return (
+                      <SelectItem key={token.symbol} value={token.symbol} disabled={!hasBalance && token.symbol !== 'ETH'} className="font-medium cursor-pointer">
+                        <div className="flex items-center justify-between w-full min-w-[120px]">
+                          <span>{token.symbol}</span>
+                          <span className="text-muted-foreground text-xs">{balanceLabel}</span>
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className='flex items-center justify-between mt-1'>
+               <p className='text-[10px] text-muted-foreground opacity-80 flex items-center gap-1'><IconWallet size={12}/> Available: {selectedBalanceLabel} {selectedToken.symbol}</p>
+               <p className='text-[10px] text-muted-foreground opacity-80 flex items-center gap-1'><IconCoins size={12}/> Gas: {formatBalanceDisplay(ethBalanceRaw, 18)} ETH</p>
+            </div>
           </div>
 
-          <div className='space-y-2'>
-            <Label htmlFor='recipient'>Recipient Address</Label>
+          <div className='space-y-1.5'>
+            <Label htmlFor='recipient' className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">Recipient Address</Label>
             <Input
               id='recipient'
               value={recipient}
               onChange={(event) => setRecipient(event.target.value)}
               placeholder='0x...'
               autoComplete='off'
+              className="font-mono text-sm shadow-inner bg-muted/30"
             />
             {recentRecipients.length > 0 && (
-              <div className='flex flex-wrap gap-2 pt-1'>
-                {recentRecipients.map((r) => (
-                  <button
-                    key={r.address}
-                    type='button'
-                    onClick={() => setRecipient(r.address)}
-                    className='px-2 py-1 text-[10px] bg-muted hover:bg-muted/80 rounded-full border border-border transition-colors'
-                  >
-                    {r.address.slice(0, 6)}...{r.address.slice(-4)}
-                  </button>
-                ))}
+              <div className='pt-2 flex items-center gap-2'>
+                <IconHistory size={12} className="text-muted-foreground" />
+                <div className='flex flex-wrap gap-2'>
+                  {recentRecipients.map((r) => (
+                    <button
+                      key={r.address}
+                      type='button'
+                      onClick={() => setRecipient(r.address)}
+                      className='px-2.5 py-1 text-[10px] font-mono bg-primary/5 hover:bg-primary/15 text-primary rounded-md border border-primary/10 transition-colors'
+                    >
+                      {r.address.slice(0, 6)}...{r.address.slice(-4)}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
 
-          <div className='space-y-2'>
-            <Label htmlFor='amount'>Amount</Label>
-            <Input
-              id='amount'
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              placeholder={`Amount in ${selectedToken.symbol}`}
-              inputMode='decimal'
-            />
+          <div className='space-y-1.5'>
+            <Label htmlFor='amount' className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">Amount</Label>
+            <div className="relative">
+              <Input
+                id='amount'
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                placeholder='0.00'
+                inputMode='decimal'
+                className="font-mono text-sm shadow-inner bg-muted/30 pr-16"
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground pointer-events-none">
+                {selectedToken.symbol}
+              </div>
+            </div>
           </div>
 
           {error && (
-            <div className='flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive'>
+            <div className='flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-destructive'>
               <AlertCircle className='mt-0.5 h-4 w-4 shrink-0' />
               <span>{error}</span>
             </div>
           )}
 
           {successTxHash && (
-            <div className='flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600'>
+            <div className='flex items-start gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-600'>
               <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0' />
               <a
-                className='underline underline-offset-2'
+                className='font-medium hover:underline underline-offset-2'
                 href={`${CHAIN.blockExplorers?.default.url}/tx/${successTxHash}`}
                 target='_blank'
                 rel='noreferrer'
               >
-                Transaction sent. View on explorer
+                Transaction successful! View receipt &rarr;
               </a>
             </div>
           )}
 
-          <Button
-            type='submit'
-            className='w-full'
-            disabled={isSubmitting || me.account === zeroAddress}
-          >
-            {isSubmitting ? 'Sending...' : `Send ${selectedToken.symbol}`}
-          </Button>
+          <div className="pt-2">
+            <Button
+              type='submit'
+              className='w-full shadow-md text-sm font-medium'
+              disabled={isSubmitting || me.account === zeroAddress}
+            >
+              {isSubmitting ? (
+                <div className="flex items-center gap-2">
+                   <div className="animate-spin h-4 w-4 border-2 border-background border-t-transparent rounded-full" />
+                   Sending...
+                </div>
+              ) : (
+                `Send ${selectedToken.symbol}`
+              )}
+            </Button>
+          </div>
         </form>
       </CardContent>
     </Card>

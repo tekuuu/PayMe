@@ -27,7 +27,7 @@ export async function signTypedData(
   const msgToSign = hash; 
 
   // 3. Get the signature from WebAuthn
-  const signature = await smartWallet.getSignature(msgToSign, keyId);
+  const signature = await smartWallet.getSignature(msgToSign);
 
   return signature;
 }

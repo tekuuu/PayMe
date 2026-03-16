@@ -30,9 +30,8 @@ import {
   isAddress,
   parseUnits,
   toHex,
-  zeroAddress,
 } from 'viem';
-import { IconLoader2, IconPlus } from '@tabler/icons-react';
+import { IconLoader2, IconPlus, IconBuildingStore, IconLock, IconCalendarClock, IconTrash } from '@tabler/icons-react';
 
 type SubscriptionState = {
   merchant: Hex;
@@ -43,6 +42,7 @@ type SubscriptionState = {
 };
 
 const STORAGE_KEY_PREFIX = 'payme_sub_merchants_';
+const APPROVE_SUBSCRIPTION_SELECTOR = '0x0f201f02';
 
 function isZeroBytes32(value: Hex | undefined) {
   if (!value) return true;
@@ -58,6 +58,165 @@ function relativeReset(lastReset: bigint, periodSeconds: bigint) {
   const hours = Math.ceil(delta / 3600);
   if (hours < 24) return `Resets in ~${hours}h`;
   return `Resets in ~${Math.ceil(hours / 24)}d`;
+}
+
+async function flushUiFrame() {
+    await new Promise<void>((resolve) => {
+        if (typeof window === 'undefined') {
+            resolve();
+            return;
+        }
+        window.requestAnimationFrame(() => resolve());
+    });
+}
+
+function shortAddress(address: string) {
+    if (!isAddress(address)) return address;
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function collectErrorTexts(error: unknown, maxDepth = 5): string[] {
+    const seen = new Set<unknown>();
+    const texts: string[] = [];
+
+    const walk = (value: unknown, depth: number) => {
+        if (!value || depth > maxDepth || seen.has(value)) return;
+        seen.add(value);
+
+        if (typeof value === 'string') {
+            texts.push(value);
+            return;
+        }
+
+        if (Array.isArray(value)) {
+            for (const item of value) walk(item, depth + 1);
+            return;
+        }
+
+        if (typeof value === 'object') {
+            const obj = value as Record<string, unknown>;
+            const candidateKeys = ['message', 'shortMessage', 'details', 'reason', 'data', 'metaMessages'];
+            for (const key of candidateKeys) {
+                if (obj[key] !== undefined) walk(obj[key], depth + 1);
+            }
+            if (obj.cause) walk(obj.cause, depth + 1);
+        }
+    };
+
+    walk(error, 0);
+    return texts;
+}
+
+function findRevertData(texts: string[]): Hex | null {
+    const contextualPatterns = [
+        /reason:\s*(0x[0-9a-fA-F]+)/i,
+        /revert(?:ed)?(?: with data)?[:\s]+(0x[0-9a-fA-F]+)/i,
+        /error data[:\s]+(0x[0-9a-fA-F]+)/i,
+        /execution reverted(?: with data)?:\s*(0x[0-9a-fA-F]+)/i,
+        /returned data:\s*(0x[0-9a-fA-F]+)/i,
+    ];
+
+    const isLikelyRevertData = (value: string) => {
+        if (!value.startsWith('0x')) return false;
+        if (value.length < 10) return false;
+        if (value.length % 2 !== 0) return false;
+        // Plain addresses are often present in error text; don't treat them as revert data.
+        if (value.length === 42) return false;
+        return true;
+    };
+
+    for (const text of texts) {
+        for (const pattern of contextualPatterns) {
+            const match = text.match(pattern);
+            const candidate = match?.[1];
+            if (candidate && isLikelyRevertData(candidate)) return candidate as Hex;
+        }
+    }
+
+    const fallbackHexPattern = /0x[0-9a-fA-F]{10,}/g;
+    for (const text of texts) {
+        const looksLikeRevertContext = /reason|revert|returned data|error data/i.test(text);
+        if (!looksLikeRevertContext) continue;
+
+        const matches = text.match(fallbackHexPattern);
+        if (!matches) continue;
+        for (const candidate of matches) {
+            if (isLikelyRevertData(candidate)) return candidate as Hex;
+        }
+    }
+
+    return null;
+}
+
+function getApproveErrorMessage(error: unknown, merchantAddress: string, signerAddress?: string) {
+    const texts = collectErrorTexts(error);
+    const message = texts.find((t) => t.length > 0) || 'Failed to approve subscription.';
+    const revertData = findRevertData(texts);
+
+    const selector = revertData ? revertData.slice(0, 10).toLowerCase() : null;
+
+    if (selector === APPROVE_SUBSCRIPTION_SELECTOR) {
+        const signerHint = signerAddress ? ` Signer: ${shortAddress(signerAddress)}.` : '';
+        return `Approval reverted before signing for merchant ${shortAddress(merchantAddress)}.${signerHint} No passkey prompt appears because simulation failed first.`;
+    }
+
+    if (selector === '0xd0d25976') {
+        const signerHint = signerAddress ? ` Signer: ${shortAddress(signerAddress)}.` : '';
+        return `Merchant ${shortAddress(merchantAddress)} is rejected by on-chain policy (SenderNotAllowed).${signerHint}`;
+    }
+
+    if (typeof message === 'string' && message.includes('Execution reverted for an unknown reason')) {
+        if (selector) {
+            const signerHint = signerAddress ? ` Signer: ${shortAddress(signerAddress)}.` : '';
+            return `Approval reverted with selector ${selector} for merchant ${shortAddress(merchantAddress)}.${signerHint}`;
+        }
+        const signerHint = signerAddress ? ` Signer: ${shortAddress(signerAddress)}.` : '';
+        return `Approval reverted without decoded reason for merchant ${shortAddress(merchantAddress)}.${signerHint}`;
+    }
+
+    const isOpaqueSimulationRevert =
+        typeof message === 'string' &&
+        message.includes('eth_estimateUserOperationGas') &&
+        message.includes('reason: 0x');
+
+    if (isOpaqueSimulationRevert) {
+        const signerHint = signerAddress ? ` Signer: ${shortAddress(signerAddress)}.` : '';
+        return `Approval simulation failed for merchant ${shortAddress(merchantAddress)} before broadcast.${signerHint} Please retry once; if it still fails, recreate the card and try again.`;
+    }
+
+    if (typeof message === 'string' && message.includes('RPC Request failed')) {
+        const signerHint = signerAddress ? ` Signer: ${shortAddress(signerAddress)}.` : '';
+        return `Approval failed during simulation for merchant ${shortAddress(merchantAddress)} before passkey signing.${signerHint}`;
+    }
+
+    return message.length > 220 ? `${message.slice(0, 220)}...` : message;
+}
+
+async function diagnoseEncryptedHandleRevert(args: {
+    cardAddress: Hex;
+    signer: Hex;
+    merchant: Hex;
+    periodSeconds: bigint;
+}) {
+    const { cardAddress, signer, merchant, periodSeconds } = args;
+    try {
+        const zeroHandle = (`0x${'00'.repeat(32)}`) as Hex;
+        const zeroCallData = encodeFunctionData({
+            abi: PRIVATE_CARD_ABI,
+            functionName: 'approveSubscription',
+            args: [merchant, zeroHandle, periodSeconds],
+        });
+
+        await PUBLIC_CLIENT.call({
+            account: signer,
+            to: cardAddress,
+            data: zeroCallData,
+        });
+
+        return `Current card contract accepts zero handle but rejects encrypted handle for merchant ${shortAddress(merchant)}. This is a contract encrypted-input compatibility issue, not a passkey signer issue.`;
+    } catch {
+        return null;
+    }
 }
 
 export default function SubscriptionsPage() {
@@ -177,8 +336,13 @@ export default function SubscriptionsPage() {
         }
 
         setIsApproving(true);
-        const loadingToastId = toast.loading('Preparing encrypted subscription limit...');
+        const loadingToastId = toast.loading('Starting approval...');
+        await flushUiFrame();
+
+        let resolvedSender: Hex | null = null;
+        let slowStepToastTimer: ReturnType<typeof setTimeout> | undefined;
         try {
+            toast.loading('Preparing encrypted subscription limit...', { id: loadingToastId });
             const encryptedInput = instance.createEncryptedInput(cardAddress, me.account as Hex);
             encryptedInput.add64(maxRaw);
             const { handles } = await encryptedInput.encrypt();
@@ -196,10 +360,20 @@ export default function SubscriptionsPage() {
                 }),
             };
 
+            resolvedSender = await builder.getSenderAddress(me.keyId);
+            if (resolvedSender.toLowerCase() !== me.account.toLowerCase()) {
+                throw new Error(`Passkey/account mismatch. Expected ${shortAddress(me.account)}, but key resolves to ${shortAddress(resolvedSender)}.`);
+            }
+
             const userOp = await builder.buildUserOp({
                 calls: [call],
                 keyId: me.keyId,
             });
+
+                        // Gas simulation can take a while; keep the user informed during this step.
+                        slowStepToastTimer = setTimeout(() => {
+                                toast.loading('Still working. Estimating gas with the bundler...', { id: loadingToastId });
+                        }, 2500);
 
             const hash = await smartWallet.sendUserOperation({ userOp });
             toast.loading('Waiting for on-chain confirmation...', { id: loadingToastId });
@@ -218,9 +392,28 @@ export default function SubscriptionsPage() {
             setMaxPerPeriod('');
             setPeriodDays('30');
             setIsAddDialogOpen(false);
-        } catch (error: any) {
-            toast.error(error?.message || 'Failed to approve subscription.', { id: loadingToastId });
+        } catch (error: unknown) {
+            console.error('Subscription approve failed', error);
+            let message = getApproveErrorMessage(error, merchant, resolvedSender || me.account);
+
+            const isGenericExecutionRevert =
+                message.includes('Approval reverted without decoded reason') ||
+                message.includes('Execution reverted for an unknown reason') ||
+                message.includes('Approval failed during simulation');
+
+            if (isGenericExecutionRevert && resolvedSender && cardAddress && isAddress(merchant)) {
+                const diagnosed = await diagnoseEncryptedHandleRevert({
+                    cardAddress,
+                    signer: resolvedSender,
+                    merchant: merchant as Hex,
+                    periodSeconds,
+                });
+                if (diagnosed) message = diagnosed;
+            }
+
+            toast.error(message, { id: loadingToastId });
         } finally {
+            if (slowStepToastTimer) clearTimeout(slowStepToastTimer);
             setIsApproving(false);
         }
     };
@@ -239,69 +432,92 @@ export default function SubscriptionsPage() {
 
     return (
         <PageContainer scrollable>
-            <div className="flex-1 space-y-2 pt-1">
-                <div className="flex items-center justify-between space-y-0 pb-1">
-                    <h2 className="text-xl font-bold tracking-tight">Subscriptions</h2>
+            <div className="flex-1 space-y-4 pt-1">
+                <div className="flex items-start sm:items-center justify-between space-y-0 pb-2 border-b border-primary/10">
+                    <div>
+                        <h2 className="text-2xl font-bold tracking-tight bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">Subscriptions</h2>
+                        <p className="text-sm text-muted-foreground mt-1">Manage your confidential recurring payments and allowances.</p>
+                    </div>
                     {hasCard && (
                         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                             <DialogTrigger asChild>
-                                <Button size='icon' className='h-9 w-9' aria-label='Add subscription'>
-                                    <IconPlus size={18} />
+                                <Button className='gap-2 shadow-sm hover:shadow dark:hover:shadow-primary/10 transition-all'>
+                                    <IconPlus size={16} />
+                                    <span className="hidden sm:inline">New Subscription</span>
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent>
+                            <DialogContent className="sm:max-w-[425px] overflow-hidden">
+                                <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none transition-opacity group-hover:opacity-10 text-primary">
+                                    <IconLock size={120} />
+                                </div>
                                 <DialogHeader>
-                                    <DialogTitle>Add Subscription</DialogTitle>
-                                    <DialogDescription>
-                                        Approve a merchant with an encrypted max spend per billing period.
+                                    <DialogTitle className="text-xl flex items-center gap-2">
+                                        <IconBuildingStore className="text-primary" size={20} />
+                                        New Subscription
+                                    </DialogTitle>
+                                    <DialogDescription className="text-sm">
+                                        Approve a merchant with an <strong className="text-primary font-medium">encrypted max spend</strong> per billing period. Your limits stay entirely confidential.
                                     </DialogDescription>
                                 </DialogHeader>
-                                <form onSubmit={onApprove} className='space-y-3'>
-                                    <div className='space-y-1'>
-                                        <Label htmlFor='merchant'>Merchant Address</Label>
+                                <form onSubmit={onApprove} className='space-y-4 pt-2 relative z-10'>
+                                    <div className='space-y-1.5'>
+                                        <Label htmlFor='merchant' className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Merchant Address</Label>
                                         <Input
                                             id='merchant'
                                             placeholder='0x...'
+                                            className="font-mono text-sm shadow-inner bg-muted/30"
                                             value={merchant}
                                             onChange={(e) => setMerchant(e.target.value)}
                                             disabled={isApproving}
                                         />
                                     </div>
-                                    <div className='space-y-1'>
-                                        <Label htmlFor='max'>Max Per Period (cUSDC)</Label>
-                                        <Input
-                                            id='max'
-                                            placeholder='e.g. 20'
-                                            value={maxPerPeriod}
-                                            onChange={(e) => setMaxPerPeriod(e.target.value)}
-                                            disabled={isApproving}
-                                        />
-                                    </div>
-                                    <div className='space-y-1'>
-                                        <Label htmlFor='period'>Period (days)</Label>
-                                        <Input
-                                            id='period'
-                                            placeholder='30'
-                                            value={periodDays}
-                                            onChange={(e) => setPeriodDays(e.target.value)}
-                                            disabled={isApproving}
-                                        />
+                                    <div className='grid grid-cols-2 gap-4'>
+                                        <div className='space-y-1.5'>
+                                            <Label htmlFor='max' className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Max Spend</Label>
+                                            <div className="relative">
+                                                <Input
+                                                    id='max'
+                                                    placeholder='e.g. 20'
+                                                    className="font-mono text-sm shadow-inner bg-muted/30 pr-12"
+                                                    value={maxPerPeriod}
+                                                    onChange={(e) => setMaxPerPeriod(e.target.value)}
+                                                    disabled={isApproving}
+                                                />
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                                                    cUSDC
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className='space-y-1.5'>
+                                            <Label htmlFor='period' className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Period</Label>
+                                            <div className="relative">
+                                                <Input
+                                                    id='period'
+                                                    placeholder='30'
+                                                    className="font-mono text-sm shadow-inner bg-muted/30 pr-12"
+                                                    value={periodDays}
+                                                    onChange={(e) => setPeriodDays(e.target.value)}
+                                                    disabled={isApproving}
+                                                />
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                                                    Days
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                     {isApproving && (
-                                        <p className='text-xs text-muted-foreground'>
-                                            Approving subscription on-chain. Please keep this window open.
-                                        </p>
+                                        <div className='rounded-lg bg-primary/10 border border-primary/20 p-3 text-xs text-primary flex items-start gap-2'>
+                                            <IconLoader2 size={16} className='animate-spin mt-0.5 shrink-0' />
+                                            <p>
+                                                <strong>Encrypting & Approving.</strong> Please sign the transaction and keep this window open until confirmed.
+                                            </p>
+                                        </div>
                                     )}
-                                    <Button type='submit' disabled={isApproving} className='w-full'>
-                                        {isApproving ? (
-                                            <>
-                                                <IconLoader2 size={14} className='animate-spin' />
-                                                Approving...
-                                            </>
-                                        ) : (
-                                            'Approve Subscription'
-                                        )}
-                                    </Button>
+                                    <div className="pt-2">
+                                        <Button type='submit' disabled={isApproving} className='w-full shadow-md text-sm font-medium'>
+                                            {isApproving ? 'Approving...' : 'Confirm Subscription'}
+                                        </Button>
+                                    </div>
                                 </form>
                             </DialogContent>
                         </Dialog>
@@ -323,39 +539,79 @@ export default function SubscriptionsPage() {
                                     const days = Number(sub.periodSeconds) / 86400;
 
                                     return (
-                                        <Card key={sub.merchant} className='transition-shadow hover:shadow-md'>
-                                            <CardHeader className='pb-2'>
-                                                <div className='flex items-center justify-between gap-2'>
-                                                    <CardTitle className='font-mono text-xs'>{sub.merchant}</CardTitle>
-                                                    <Badge variant={active ? 'default' : 'secondary'}>
+                                        <Card key={sub.merchant} className='group relative overflow-hidden transition-all hover:shadow-xl dark:hover:shadow-primary/5 border-primary/10 bg-gradient-to-b from-background to-muted/20'>
+                                            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none transition-opacity group-hover:opacity-10">
+                                                <IconLock size={80} />
+                                            </div>
+                                            <CardHeader className='pb-4'>
+                                                <div className='flex items-center justify-between gap-4'>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                                            <IconBuildingStore size={20} />
+                                                        </div>
+                                                        <div>
+                                                            <CardTitle className='text-sm font-medium tracking-tight'>Merchant</CardTitle>
+                                                            <div className='font-mono text-xs text-muted-foreground mt-0.5'>{shortAddress(sub.merchant)}</div>
+                                                        </div>
+                                                    </div>
+                                                    <Badge variant={active ? 'default' : 'secondary'} className={active ? 'bg-primary/15 text-primary hover:bg-primary/25 border-0' : ''}>
                                                         {active ? 'Active' : 'Not set'}
                                                     </Badge>
                                                 </div>
-                                                <CardDescription>Billing period: {Number.isFinite(days) ? days : 0} day(s)</CardDescription>
                                             </CardHeader>
-                                            <CardContent className='space-y-1 text-xs text-muted-foreground'>
-                                                <p>Max per period handle: {sub.maxPerPeriod.slice(0, 10)}...</p>
-                                                <p>Spent handle: {sub.spentThisPeriod.slice(0, 10)}...</p>
-                                                <p>{relativeReset(sub.lastReset, sub.periodSeconds)}</p>
-                                                <Button
-                                                    size='sm'
-                                                    variant='ghost'
-                                                    className='mt-2 h-7 px-2 text-xs'
-                                                    onClick={() => {
-                                                        const next = trackedMerchants.filter((m) => m.toLowerCase() !== sub.merchant.toLowerCase());
-                                                        persistTrackedMerchants(next);
-                                                    }}
-                                                >
-                                                    Remove from list
-                                                </Button>
+                                            
+                                            <CardContent className='space-y-4'>
+                                                <div className="grid grid-cols-2 gap-4 rounded-lg border bg-background/50 p-3 shadow-inner">
+                                                    <div className='space-y-1.5'>
+                                                        <div className='text-[10px] font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5'>
+                                                            <IconLock size={12} />
+                                                            Max Spend
+                                                        </div>
+                                                        <div className='font-mono text-xs font-medium bg-muted py-1 flex items-center rounded px-2 w-fit max-w-full overflow-hidden text-ellipsis whitespace-nowrap' title={sub.maxPerPeriod}>
+                                                            {sub.maxPerPeriod.slice(0, 10)}...
+                                                        </div>
+                                                    </div>
+                                                    <div className='space-y-1.5'>
+                                                        <div className='text-[10px] font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5'>
+                                                            <IconLock size={12} />
+                                                            Spent
+                                                        </div>
+                                                        <div className='font-mono text-xs font-medium bg-muted py-1 flex items-center rounded px-2 w-fit max-w-full overflow-hidden text-ellipsis whitespace-nowrap' title={sub.spentThisPeriod}>
+                                                            {sub.spentThisPeriod.slice(0, 10)}...
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className='flex items-center justify-between text-xs text-muted-foreground pt-1'>
+                                                    <div className='flex items-center gap-1.5'>
+                                                        <IconCalendarClock size={14} className="text-primary/70" />
+                                                        <span>{Number.isFinite(days) ? days : 0}d period &bull; {relativeReset(sub.lastReset, sub.periodSeconds)}</span>
+                                                    </div>
+                                                    <Button
+                                                        size='icon'
+                                                        variant='ghost'
+                                                        className='h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10'
+                                                        title="Remove from list"
+                                                        onClick={() => {
+                                                            const next = trackedMerchants.filter((m) => m.toLowerCase() !== sub.merchant.toLowerCase());
+                                                            persistTrackedMerchants(next);
+                                                        }}
+                                                    >
+                                                        <IconTrash size={14} />
+                                                    </Button>
+                                                </div>
                                             </CardContent>
                                         </Card>
                                     );
                                 })
                             ) : (
-                                <div className='col-span-full rounded-xl border-2 border-dashed bg-muted/20 py-12 text-center'>
-                                    <p className='italic text-muted-foreground'>
-                                        {isRefreshing ? 'Loading subscriptions...' : 'No tracked subscriptions yet.'}
+                                <div className='col-span-full flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-primary/20 bg-primary/5 py-16 text-center shadow-inner'>
+                                    <div className="mb-4 rounded-full bg-primary/10 p-4 text-primary opacity-80">
+                                        <IconBuildingStore size={32} />
+                                    </div>
+                                    <h3 className="text-lg font-semibold tracking-tight text-foreground">No Subscriptions Found</h3>
+                                    <p className='text-sm text-muted-foreground mt-1 max-w-sm'>
+                                        {isRefreshing ? 'Loading your confidential subscriptions...' : "You haven't approved any subscriptions yet. Click the + button above to approve a new merchant."}
                                     </p>
                                 </div>
                             )}

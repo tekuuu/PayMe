@@ -3,22 +3,15 @@ import {
   GetContractReturnType,
   Hex,
   PublicClient,
-  WalletClient,
   createPublicClient,
-  createWalletClient,
   encodeFunctionData,
   encodePacked,
   getContract,
   http,
-  parseAbi,
   toHex,
-  encodeAbiParameters,
-  Address,
-  zeroAddress,
+  parseAbi,
 } from "viem";
-import { UserOperationAsHex, UserOperation, Call } from "@/lib/smart-wallet/service/userOps/types";
-import { DEFAULT_USER_OP } from "@/lib/smart-wallet/service/userOps/constants";
-import { P256Credential, WebAuthn } from "@/lib/web-authn/web-authn";
+import { UserOperationAsHex, Call } from "@/lib/smart-wallet/service/userOps/types";
 import { ENTRYPOINT_ABI, ENTRYPOINT_ADDRESS, FACTORY_ABI } from "@/config/constants";
 import { smartWallet } from "@/lib/smart-wallet";
 
@@ -31,8 +24,6 @@ export class UserOpBuilder {
 
   constructor(chain: Chain) {
     this.chain = chain;
-    // Use the standard public RPC for contract reads (eth_call, eth_getCode, eth_estimateGas).
-    // Pimlico is bundler-only and does NOT support these standard methods.
     const rpcUrl =
       process.env.NEXT_PUBLIC_RPC_ENDPOINT ||
       "https://ethereum-sepolia-rpc.publicnode.com";
@@ -42,20 +33,13 @@ export class UserOpBuilder {
       transport: http(rpcUrl),
     });
 
-    const walletClient = createWalletClient({
-      account: this.relayer,
-      chain,
-      transport: http(rpcUrl),
-    });
-
     this.factoryContract = getContract({
-      address: process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS as Hex, // only on Sepolia
+      address: process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS as Hex,
       abi: FACTORY_ABI,
       client: this.publicClient,
     });
   }
 
-  // reference: https://ethereum.stackexchange.com/questions/150796/how-to-create-a-raw-erc-4337-useroperation-from-scratch-and-then-send-it-to-bund
   async buildUserOp({
     calls,
     maxFeePerGas,
@@ -69,10 +53,8 @@ export class UserOpBuilder {
     keyId: Hex;
     nonce?: bigint;
   }): Promise<UserOperationAsHex> {
-    // Ensure bundler client methods are available even if caller forgot to init.
     smartWallet.init();
 
-    // 0. Resolve gas prices if not provided
     let resolvedMaxFeePerGas = maxFeePerGas;
     let resolvedMaxPriorityFeePerGas = maxPriorityFeePerGas;
 
@@ -89,276 +71,106 @@ export class UserOpBuilder {
         resolvedMaxPriorityFeePerGas = resolvedMaxPriorityFeePerGas ?? fees.maxPriorityFeePerGas ?? 0n;
       }
     }
-    // calculate smart wallet address via Factory contract to know the sender
-    const { account, publicKey } = await this._calculateSmartWalletAddress(keyId); // the keyId is the id tied to the user's public key
 
-    // get bytecode
+    const { account, publicKey } = await this._calculateSmartWalletAddressFromLocalStorage();
+
     const bytecode = await this.publicClient.getBytecode({
       address: account,
     });
 
     let initCode = toHex(new Uint8Array(0));
-    let initCodeGas = BigInt(0);
     if (bytecode === undefined) {
-      // smart wallet does NOT already exists
-      // calculate initCode and initCodeGas
-      ({ initCode, initCodeGas } = await this._createInitCode(publicKey));
+      ({ initCode } = await this._createInitCode(publicKey));
     }
 
-    // calculate nonce (or use caller-provided nonce to avoid cross-RPC lag issues)
     const resolvedNonce = nonce ?? (await this._getNonce(account));
-
-    // create callData
     const callData = this._addCallData(calls);
 
-    // create user operation
-    const userOp: UserOperation = {
-      ...DEFAULT_USER_OP,
+    const partialOp = {
       sender: account,
-      nonce: resolvedNonce,
+      nonce: toHex(resolvedNonce),
       initCode,
       callData,
-      maxFeePerGas: resolvedMaxFeePerGas!,
-      maxPriorityFeePerGas: resolvedMaxPriorityFeePerGas!,
-    };
-
-    // estimate gas for this partial user operation
-    // real good article about the subject can be found here:
-    // https://www.alchemy.com/blog/erc-4337-gas-estimation
-    let callGasLimit: Hex | bigint;
-    let verificationGasLimit: Hex | bigint;
-    let preVerificationGas: Hex | bigint;
-
-    const toBigIntGas = (value: Hex | bigint): bigint =>
-      typeof value === "bigint" ? value : BigInt(value);
-
+      maxFeePerGas: toHex(resolvedMaxFeePerGas),
+      maxPriorityFeePerGas: toHex(resolvedMaxPriorityFeePerGas),
+      paymasterAndData: "0x",
+      signature: "0x",
+      callGasLimit: "0x0",
+      verificationGasLimit: "0x0",
+      preVerificationGas: "0x0",
+    } as any;
+    
     try {
-      ({ callGasLimit, verificationGasLimit, preVerificationGas } =
-        await smartWallet.estimateUserOperationGas({
-          userOp: this.toParams(userOp),
-        }));
-    } catch (error: any) {
-      const estimateMessage = error?.message || "";
-      if (typeof estimateMessage === "string" && estimateMessage.includes("AA21")) {
-        throw new Error("Smart wallet has insufficient ETH for user-op prefund (AA21). Please top up ETH and retry.");
-      }
-
-      // Retry once with larger placeholders for bundlers that are strict during simulation.
-      userOp.callGasLimit = BigInt(2_000_000);
-      userOp.verificationGasLimit = BigInt(2_000_000);
-      userOp.preVerificationGas = BigInt(200_000);
-
-      ({ callGasLimit, verificationGasLimit, preVerificationGas } =
-        await smartWallet.estimateUserOperationGas({
-          userOp: this.toParams(userOp),
-        }));
+        const gasEstimate = await smartWallet.estimateUserOperationGas({ userOp: partialOp });
+        return {
+          ...partialOp,
+          callGasLimit: toHex(BigInt(gasEstimate.callGasLimit) + BigInt(2000000)),
+          verificationGasLimit: toHex(BigInt(gasEstimate.verificationGasLimit) + BigInt(2000000)),
+          preVerificationGas: toHex(BigInt(gasEstimate.preVerificationGas) + BigInt(20000)),
+        };
+    } catch(e) {
+        console.warn("Gas estimation failed, falling back to generous defaults", e);
+        return {
+          ...partialOp,
+          callGasLimit: toHex(BigInt(5000000)),
+          verificationGasLimit: toHex(BigInt(3000000)),
+          preVerificationGas: toHex(BigInt(500000)),
+        }
     }
-
-    // set gas limits with buffered values
-    userOp.callGasLimit = toBigIntGas(callGasLimit);
-    // preVerificationGas from simulation is often low because final signature payload is added later.
-    // Add both a percentage and fixed buffer to avoid "preVerificationGas is not enough" rejections.
-    const estimatedPreVerificationGas = toBigIntGas(preVerificationGas);
-    const bufferedPreVerificationGas = (estimatedPreVerificationGas * BigInt(12)) / BigInt(10) + BigInt(25_000);
-    const MINIMUM_PRE_VERIFICATION_GAS = BigInt(65_000);
-    userOp.preVerificationGas =
-      bufferedPreVerificationGas > MINIMUM_PRE_VERIFICATION_GAS
-        ? bufferedPreVerificationGas
-        : MINIMUM_PRE_VERIFICATION_GAS;
-    // P256/WebAuthn (secp256r1) verification costs 300k-350k gas on EVM without RIP-7212 precompile.
-    // The bundler estimates with a dummy zero-signature so the on-chain sig check is skipped.
-    // We must add a large buffer to cover the real signature verification cost.
-    const estimatedVerification = toBigIntGas(verificationGasLimit) + BigInt(initCodeGas);
-    const withBuffer = estimatedVerification + BigInt(400_000);
-    const MINIMUM_VERIFICATION_GAS = BigInt(500_000);
-    userOp.verificationGasLimit = withBuffer > MINIMUM_VERIFICATION_GAS ? withBuffer : MINIMUM_VERIFICATION_GAS;
-
-    // get userOp hash (with signature == 0x) by calling the entry point contract
-    const userOpHash = await this._getUserOpHash(userOp);
-
-    // RESTORE: The contract expects a packed message including version and timing, not just the hash
-    const msgToSign = encodePacked(["uint8", "uint48", "bytes32"], [1, 0, userOpHash]);
-
-    // get signature from webauthn
-    const signature = await this.getSignature(msgToSign, keyId);
-
-    return this.toParams({ ...userOp, signature });
   }
 
-  public toParams(op: UserOperation): UserOperationAsHex {
-    return {
-      sender: op.sender,
-      nonce: toHex(op.nonce),
-      initCode: op.initCode,
-      callData: op.callData,
-      callGasLimit: toHex(op.callGasLimit),
-      verificationGasLimit: toHex(op.verificationGasLimit),
-      preVerificationGas: toHex(op.preVerificationGas),
-      maxFeePerGas: toHex(op.maxFeePerGas),
-      maxPriorityFeePerGas: toHex(op.maxPriorityFeePerGas),
-      paymasterAndData: op.paymasterAndData === zeroAddress ? "0x" : op.paymasterAndData,
-      signature: op.signature,
-    };
-  }
-
-  public async getSignature(msgToSign: Hex, keyId: Hex): Promise<Hex> {
-    const credentials: P256Credential = (await WebAuthn.get(msgToSign)) as P256Credential;
-
-    if (credentials.rawId !== keyId) {
-      throw new Error(
-        "Incorrect passkeys used for tx signing. Please sign the transaction with the correct logged-in account",
-      );
-    }
-
-    const signature = encodePacked(
-      ["uint8", "uint48", "bytes"],
-      [
-        1,
-        0,
-        encodeAbiParameters(
-          [
-            {
-              type: "tuple",
-              name: "credentials",
-              components: [
-                {
-                  name: "authenticatorData",
-                  type: "bytes",
-                },
-                {
-                  name: "clientDataJSON",
-                  type: "string",
-                },
-                {
-                  name: "challengeLocation",
-                  type: "uint256",
-                },
-                {
-                  name: "responseTypeLocation",
-                  type: "uint256",
-                },
-                {
-                  name: "r",
-                  type: "uint256",
-                },
-                {
-                  name: "s",
-                  type: "uint256",
-                },
-              ],
-            },
-          ],
-          [
-            {
-              authenticatorData: credentials.authenticatorData,
-              clientDataJSON: credentials.rawClientDataJSON,
-              challengeLocation: BigInt(23),
-              responseTypeLocation: BigInt(1),
-              r: BigInt(credentials.signature.r),
-              s: BigInt(credentials.signature.s),
-            },
-          ],
-        ),
-      ],
-    );
-
-    return signature;
-  }
-
-  public async getSenderAddress(keyId: Hex): Promise<Address> {
-    const { account } = await this._calculateSmartWalletAddress(keyId);
+  async getSenderAddress(keyId: Hex): Promise<Hex> {
+    const { account } = await this._calculateSmartWalletAddressFromLocalStorage();
     return account;
   }
 
-  private async _createInitCode(
-    pubKey: readonly [Hex, Hex],
-  ): Promise<{ initCode: Hex; initCodeGas: bigint }> {
-    let createAccountTx = encodeFunctionData({
-      abi: FACTORY_ABI,
-      functionName: "createAccount",
-      args: [pubKey],
-    });
-
-    let initCode = encodePacked(
-      ["address", "bytes"], // types
-      [this.factoryContract.address, createAccountTx], // values
-    );
-
-    let initCodeGas = await this.publicClient.estimateGas({
-      account: this.relayer,
-      to: this.factoryContract.address,
-      data: createAccountTx,
-    });
-
-    return {
-      initCode,
-      initCodeGas,
-    };
+  private async _calculateSmartWalletAddressFromLocalStorage(): Promise<{ account: Hex; publicKey: [bigint, bigint] }> {
+    const meStr = localStorage.getItem("passkeys4337.me");
+    if (!meStr) throw new Error("User session not found in localStorage");
+    
+    const me = JSON.parse(meStr);
+    const publicKey: [bigint, bigint] = [BigInt(me.pubKey.x), BigInt(me.pubKey.y)];
+    const account = me.account as Hex;
+    
+    return { account, publicKey };
   }
 
-  private async _calculateSmartWalletAddress(
-    id: Hex,
-  ): Promise<{ account: Address; publicKey: readonly [Hex, Hex] }> {
-    const user = await this.factoryContract.read.getUser([BigInt(id)]);
-    return { account: user.account, publicKey: user.publicKey };
+  private async _createInitCode(publicKey: [bigint, bigint]): Promise<{ initCode: Hex }> {
+    const initCode = encodePacked(
+      ["address", "bytes"],
+      [
+        process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS as Hex,
+        encodeFunctionData({
+          abi: FACTORY_ABI,
+          functionName: "createAccount",
+          args: [publicKey[0], publicKey[1]],
+        }),
+      ]
+    );
+    return { initCode };
+  }
+
+  private async _getNonce(account: Hex): Promise<bigint> {
+    const entryPoint = getContract({
+      address: this.entryPoint,
+      abi: ENTRYPOINT_ABI,
+      client: this.publicClient,
+    });
+    return await entryPoint.read.getNonce([account, 0n]);
   }
 
   private _addCallData(calls: Call[]): Hex {
+    if (calls.length === 1) {
+      return encodeFunctionData({
+        abi: parseAbi(["function execute(address dest, uint256 value, bytes calldata func) external"]),
+        functionName: "execute",
+        args: [calls[0].dest, calls[0].value, calls[0].data],
+      });
+    }
     return encodeFunctionData({
-      abi: [
-        {
-          inputs: [
-            {
-              components: [
-                {
-                  internalType: "address",
-                  name: "dest",
-                  type: "address",
-                },
-                {
-                  internalType: "uint256",
-                  name: "value",
-                  type: "uint256",
-                },
-                {
-                  internalType: "bytes",
-                  name: "data",
-                  type: "bytes",
-                },
-              ],
-              internalType: "struct Call[]",
-              name: "calls",
-              type: "tuple[]",
-            },
-          ],
-          name: "executeBatch",
-          outputs: [],
-          stateMutability: "nonpayable",
-          type: "function",
-        },
-      ],
+      abi: parseAbi(["function executeBatch(address[] calldata dest, uint256[] calldata value, bytes[] calldata func) external"]),
       functionName: "executeBatch",
-      args: [calls],
+      args: [calls.map((c) => c.dest), calls.map((c) => c.value), calls.map((c) => c.data)],
     });
-  }
-
-  private async _getNonce(smartWalletAddress: Hex): Promise<bigint> {
-    const nonce: bigint = await this.publicClient.readContract({
-      address: this.entryPoint,
-      abi: parseAbi(["function getNonce(address, uint192) view returns (uint256)"]),
-      functionName: "getNonce",
-      args: [smartWalletAddress, BigInt(0)],
-    });
-    return nonce;
-  }
-
-  private async _getUserOpHash(userOp: UserOperation): Promise<Hex> {
-    const userOpHash = await this.publicClient.readContract({
-      address: this.entryPoint,
-      abi: ENTRYPOINT_ABI,
-      functionName: "getUserOpHash",
-      args: [userOp],
-    });
-    return userOpHash;
   }
 }

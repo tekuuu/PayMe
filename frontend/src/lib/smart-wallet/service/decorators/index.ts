@@ -10,6 +10,7 @@ import {
   getIsValidSignature,
   waitForUserOperationReceipt,
   signTypedData,
+  getUserOperationHash,
 } from "../actions";
 import { SmartWalletClient } from "@/lib/smart-wallet/service/smart-wallet";
 import { UserOperationAsHex } from "@/lib/smart-wallet/service/userOps";
@@ -23,6 +24,7 @@ export type SmartWalletActions = {
   getUserOperationReceipt: (args: any) => Promise<GetUserOperationReceiptReturnType>;
   getIsValidSignature: (args: any) => Promise<GetIsValidSignatureReturnType>;
   waitForUserOperationReceipt: (args: any) => Promise<GetUserOperationReceiptReturnType>;
+  getUserOperationHash: (args: { userOp: UserOperationAsHex }) => Promise<Hex>;
   signTypedData: (args: {
     domain: any;
     types: any;
@@ -41,6 +43,7 @@ export function smartWalletActions(client: Client): SmartWalletActions {
     getIsValidSignature: (args) => getIsValidSignature(client as SmartWalletClient, args),
     waitForUserOperationReceipt: (args) =>
       waitForUserOperationReceipt(client as SmartWalletClient, args),
+    getUserOperationHash: (args) => getUserOperationHash(client as SmartWalletClient, args),
     signTypedData: (args) => signTypedData(client as SmartWalletClient, args),
   };
 }

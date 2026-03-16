@@ -32,34 +32,36 @@ export default function PaymentsPage() {
 
     return (
         <PageContainer scrollable>
-            <div className="flex-1 space-y-1 pt-1">
-                <div className="flex flex-col space-y-0 border-b pb-1 px-4 md:px-6">
-                    <h2 className="text-xl font-bold tracking-tight">Payments</h2>
-                    <p className="text-muted-foreground text-xs">
+            <div className="flex-1 space-y-4 pt-1">
+                <div className="flex flex-col space-y-0 border-b border-primary/10 pb-2 px-4 md:px-6">
+                    <h2 className="text-2xl font-bold tracking-tight bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">Payments</h2>
+                    <p className="text-sm text-muted-foreground mt-1">
                         Send and receive funds securely using your Zama FHEVM-powered smart wallet.
                     </p>
                 </div>
 
-                <div className="px-2 pt-2">
-                    <Tabs defaultValue="send" className="space-y-4">
-                        <TabsList className="grid w-full max-w-md grid-cols-2">
-                            <TabsTrigger value="send" className="flex items-center gap-2">
-                                <IconSend size={16} />
-                                Send
+                <div className="px-2 pt-2 sm:px-4 flex justify-center w-full">
+                    <Tabs defaultValue="send" className="space-y-4 w-full max-w-xl mx-auto">
+                        <TabsList className="grid w-full grid-cols-2 p-1 bg-muted/40 border border-primary/10 shadow-inner rounded-xl h-12">
+                            <TabsTrigger value="send" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary transition-all">
+                                <IconSend size={18} />
+                                <span className="font-medium text-sm">Send</span>
                             </TabsTrigger>
-                            <TabsTrigger value="receive" className="flex items-center gap-2">
-                                <IconDownload size={16} />
-                                Receive
+                            <TabsTrigger value="receive" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary transition-all">
+                                <IconDownload size={18} />
+                                <span className="font-medium text-sm">Receive</span>
                             </TabsTrigger>
                         </TabsList>
 
-                        <TabsContent value="send" className="space-y-4">
-                            <SendTokenCard me={me} />
-                        </TabsContent>
+                        <div className="flex justify-center w-full mt-4">
+                            <TabsContent value="send" className="w-full mt-0">
+                                <SendTokenCard me={me} />
+                            </TabsContent>
 
-                        <TabsContent value="receive" className="space-y-4">
-                            <ReceiveTokenCard address={me.account} />
-                        </TabsContent>
+                            <TabsContent value="receive" className="w-full mt-0">
+                                <ReceiveTokenCard address={me.account} />
+                            </TabsContent>
+                        </div>
                     </Tabs>
                 </div>
             </div>

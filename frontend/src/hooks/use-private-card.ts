@@ -25,6 +25,7 @@ export function usePrivateCard(me: Me | null) {
         args: [me?.account as Hex],
         query: {
             enabled: !!me?.account && me.account !== zeroAddress,
+            staleTime: 5000,
         }
     });
 
@@ -69,8 +70,11 @@ export function usePrivateCard(me: Me | null) {
             const hash = await smartWallet.sendUserOperation({ userOp });
             await smartWallet.waitForUserOperationReceipt({ hash });
 
-            toast.success("Private Card successfully created!");
+            // Add a small delay to ensure the RPC state has updated before refetching
+            await new Promise(resolve => setTimeout(resolve, 1000));
             await refetch();
+
+            toast.success("Private Card successfully created!");
         } catch (error: any) {
             console.error("Failed to create card:", error);
             toast.error(error?.message || "Failed to create Private Card");

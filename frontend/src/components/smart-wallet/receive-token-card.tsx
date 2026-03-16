@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Check, Copy, Download, Share2 } from 'lucide-react';
+import { IconQrcode, IconWallet } from '@tabler/icons-react';
 import { Hex } from 'viem';
 import { toast } from 'sonner';
 
@@ -50,28 +51,34 @@ export function ReceiveTokenCard({ address }: ReceiveTokenCardProps) {
 
     if (!address) {
         return (
-            <Card className="border">
-                <CardContent className="pt-6 text-center text-muted-foreground">
-                    Connect your wallet to receive funds.
+            <Card className="w-full border-primary/10 bg-gradient-to-b from-background to-muted/20">
+                <CardContent className="pt-6 text-center text-muted-foreground p-8">
+                    <IconWallet className="mx-auto mb-4 opacity-50 text-primary" size={48} />
+                    <p className="font-medium">Connect your wallet to receive funds.</p>
                 </CardContent>
             </Card>
         );
     }
 
     return (
-        <Card className="max-w-xl border">
-            <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                    <Download className="h-4 w-4" />
+        <Card className="w-full border-primary/10 bg-gradient-to-b from-background to-muted/20 relative overflow-hidden shadow-md dark:shadow-primary/5">
+            <div className="absolute top-0 right-0 p-6 opacity-[0.03] pointer-events-none transition-opacity group-hover:opacity-10 text-primary">
+                <Download size={140} />
+            </div>
+            <CardHeader className="pb-4 relative z-10">
+                <CardTitle className="flex items-center gap-2 text-xl font-semibold">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <Download className="h-5 w-5" />
+                    </div>
                     Receive Funds
                 </CardTitle>
-                <CardDescription className="text-xs">
-                    Share your smart wallet address to receive ETH, USDC, or WETH.
+                <CardDescription className="text-sm">
+                    Share your smart wallet address to receive payments.
                 </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-                <div className="flex flex-col items-center justify-center space-y-3">
-                    <div className="p-3 bg-white rounded-xl border-4 border-slate-100 shadow-sm">
+            <CardContent className="space-y-4 relative z-10">
+                <div className="flex flex-col items-center justify-center space-y-3 p-4 bg-muted/30 rounded-xl shadow-inner border border-primary/5">
+                    <div className="p-3 bg-white rounded-xl shadow-sm hover:scale-105 transition-transform">
                         <QRCodeSVG
                             id="qr-code-svg"
                             value={address}
@@ -81,39 +88,39 @@ export function ReceiveTokenCard({ address }: ReceiveTokenCardProps) {
                             className="rounded-sm"
                         />
                     </div>
-                    <p className="text-xs font-medium text-muted-foreground italic">
-                        Scan to pay me
+                    <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                        <IconQrcode size={14}/> Scan to pay me
                     </p>
                 </div>
 
-                <div className="space-y-2">
-                    <Label htmlFor="address">Your Wallet Address</Label>
+                <div className="space-y-1.5 pt-2">
+                    <Label htmlFor="address" className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">Your Wallet Address</Label>
                     <div className="flex gap-2">
                         <Input
                             id="address"
                             value={address}
                             readOnly
-                            className="font-mono text-xs md:text-sm bg-muted/50"
+                            className="font-mono text-xs md:text-sm bg-muted/50 shadow-inner"
                         />
                         <Button
-                            variant="outline"
-                            size="icon"
+                            variant="secondary"
                             onClick={copyToClipboard}
-                            className="shrink-0"
+                            className="shrink-0 shadow-sm transition-all active:scale-95"
                         >
                             {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                            <span className="sr-only">Copy address</span>
                         </Button>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 pt-2">
-                    <Button variant="outline" className="w-full gap-2" onClick={downloadQRCode}>
+                    <Button variant="outline" className="w-full gap-2 shadow-sm border-primary/20 hover:bg-primary/5" onClick={downloadQRCode}>
                         <Download className="h-4 w-4" />
                         Save QR
                     </Button>
                     <Button
                         variant="outline"
-                        className="w-full gap-2"
+                        className="w-full gap-2 shadow-sm border-primary/20 hover:bg-primary/5"
                         onClick={() => {
                             if (navigator.share) {
                                 navigator.share({
@@ -127,7 +134,7 @@ export function ReceiveTokenCard({ address }: ReceiveTokenCardProps) {
                         }}
                     >
                         <Share2 className="h-4 w-4" />
-                        Share
+                        Share Link
                     </Button>
                 </div>
             </CardContent>

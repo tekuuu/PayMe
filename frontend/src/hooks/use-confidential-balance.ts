@@ -107,19 +107,19 @@ export function useConfidentialBalance(cardAddress: Hex | undefined) {
 
     // Read encrypted handle directly from wrapper, same pattern as reference project.
     const { data: balanceHandle, refetch } = useReadContract({
-        address: cardCusdcAddress as Hex,
-        abi: WRAPPER_READ_ABI,
-        functionName: 'confidentialBalanceOf',
-        args: [cardAddress as Hex],
+        address: cardAddress as Hex,
+        abi: [{ name: 'getEncryptedBalance', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] }],
+        functionName: 'getEncryptedBalance',
+        args: [],
         query: {
-            enabled: !!cardAddress && !!cardCusdcAddress,
+            enabled: !!cardAddress,
         }
     });
 
     const requests = useMemo(() => {
         if (!cardCusdcAddress || !balanceHandle || (balanceHandle as string) === '0x' + '0'.repeat(64)) return undefined;
-        return [{ handle: balanceHandle as string, contractAddress: cardCusdcAddress as Hex }];
-    }, [cardCusdcAddress, balanceHandle]);
+        return [{ handle: balanceHandle as string, contractAddress: cardAddress as Hex }];
+    }, [cardAddress, cardCusdcAddress, balanceHandle]);
 
     // 2. Decrypt the balance handle
     const {
