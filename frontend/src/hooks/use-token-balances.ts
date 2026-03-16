@@ -2,6 +2,7 @@
 
 import { useBalance, useReadContract } from 'wagmi';
 import { formatEther } from 'viem';
+import { CHAIN } from '@/config/constants';
 
 // Sepolia testnet token addresses
 const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'; // USDC on Sepolia
@@ -27,6 +28,7 @@ const ERC20_ABI = [
 export function useTokenBalances(address?: string) {
   const { data: ethBalance, isError: ethError } = useBalance({
     address: address as `0x${string}`,
+    chainId: CHAIN.id,
     query: {
       enabled: !!address,
     }
@@ -37,6 +39,7 @@ export function useTokenBalances(address?: string) {
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: [address as `0x${string}`],
+    chainId: CHAIN.id,
     query: {
       enabled: !!address,
     }
@@ -47,6 +50,7 @@ export function useTokenBalances(address?: string) {
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: [address as `0x${string}`],
+    chainId: CHAIN.id,
     query: {
       enabled: !!address,
     }

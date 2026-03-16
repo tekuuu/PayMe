@@ -81,7 +81,7 @@ export function SendTokenCard({ me }: { me: Me }) {
   const [amount, setAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successHash, setSuccessHash] = useState<string | null>(null);
+  const [successTxHash, setSuccessTxHash] = useState<string | null>(null);
   const [recentRecipients, setRecentRecipients] = useState<RecentRecipient[]>([]);
 
   // Load recent recipients on mount
@@ -122,7 +122,7 @@ export function SendTokenCard({ me }: { me: Me }) {
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    setSuccessHash(null);
+    setSuccessTxHash(null);
 
     if (!isAddress(recipient)) {
       setError('Please enter a valid wallet address.');
@@ -191,7 +191,17 @@ export function SendTokenCard({ me }: { me: Me }) {
 
       const hash = await smartWallet.sendUserOperation({ userOp });
       const receipt = await smartWallet.waitForUserOperationReceipt({ hash });
-      setSuccessHash(receipt?.userOpHash || hash);
+
+      if (!receipt || receipt.success === false || receipt.receipt?.status !== '0x1') {
+        throw new Error('Transaction reverted during execution. No on-chain transfer was finalized.');
+      }
+
+      const txHash = receipt.receipt?.transactionHash as string | undefined;
+      if (!txHash) {
+        throw new Error('Transaction confirmed but transaction hash is missing in receipt.');
+      }
+
+      setSuccessTxHash(txHash);
       saveRecipient(recipient as Hex);
       setAmount('');
       setRecipient('');
@@ -290,12 +300,12 @@ export function SendTokenCard({ me }: { me: Me }) {
             </div>
           )}
 
-          {successHash && (
+          {successTxHash && (
             <div className='flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600'>
               <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0' />
               <a
                 className='underline underline-offset-2'
-                href={`${CHAIN.blockExplorers?.default.url}/tx/${successHash}`}
+                href={`${CHAIN.blockExplorers?.default.url}/tx/${successTxHash}`}
                 target='_blank'
                 rel='noreferrer'
               >
