@@ -1,2 +1,7 @@
 /specs/
 /.specify/
+
+# Environment files
+.env
+.env.local
+.env.*.local

@@ -143,7 +143,10 @@ export class UserOpBuilder {
         encodeFunctionData({
           abi: FACTORY_ABI,
           functionName: "createAccount",
-          args: [publicKey[0], publicKey[1]],
+          args: [[
+            toHex(publicKey[0], { size: 32 }),
+            toHex(publicKey[1], { size: 32 }),
+          ]],
         }),
       ]
     );

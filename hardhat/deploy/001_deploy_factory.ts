@@ -1,11 +1,13 @@
 import { ethers } from "hardhat";
+import * as dotenv from "dotenv";
+
+dotenv.config();
 
 async function main() {
   console.log("Deploying SimpleAccountFactory...");
 
-  // The EntryPoint address for v0.6 is the same on many networks (Sepolia, Local)
-  // If you are on a custom FHEVM node, you may need to deploy EntryPoint first.
-  const entryPointAddress = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
+  const entryPointAddress = process.env.ENTRYPOINT_ADDRESS || "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
+  console.log("EntryPoint for deployment:", entryPointAddress);
 
   const Factory = await ethers.getContractFactory("SimpleAccountFactory");
   const factory = await Factory.deploy(entryPointAddress);
