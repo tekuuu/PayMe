@@ -29,6 +29,9 @@ export function useConfidentialBalance(cardAddress: Hex | undefined, ownerAddres
     const [serverSignerAddress, setServerSignerAddress] = useState<Hex | undefined>(undefined);
     const [serverSignerError, setServerSignerError] = useState<string | null>(null);
 
+    const [cachedHandle, setCachedHandle] = useState<string | undefined>(undefined);
+    const [cachedDecryptedValue, setCachedDecryptedValue] = useState<bigint | undefined>(undefined);
+
     useEffect(() => {
         let cancelled = false;
 
@@ -119,6 +122,8 @@ export function useConfidentialBalance(cardAddress: Hex | undefined, ownerAddres
         account: callerAddress,
         query: {
             enabled: !!cardAddress && !!callerAddress,
+            staleTime: 30_000,
+            refetchOnWindowFocus: false,
         }
     });
 
@@ -173,10 +178,66 @@ export function useConfidentialBalance(cardAddress: Hex | undefined, ownerAddres
         return normalizedMatch[1] as bigint;
     }, [balanceHandle, results]);
 
+    useEffect(() => {
+        if (!balanceHandle) {
+            setCachedHandle(undefined);
+            setCachedDecryptedValue(undefined);
+            if (typeof window !== 'undefined' && cardAddress) {
+                window.localStorage.removeItem(`payme.decryptedBalance.${cardAddress}`);
+            }
+            return;
+        }
+
+        const handleHex = typeof balanceHandle === 'string'
+            ? balanceHandle
+            : toHex(balanceHandle, { size: 32 });
+
+        // Always try to restore from localStorage when handle changes
+        if (typeof window !== 'undefined' && cardAddress && handleHex) {
+            const persisted = window.localStorage.getItem(`payme.decryptedBalance.${cardAddress}`);
+            if (persisted) {
+                try {
+                    const parsed = JSON.parse(persisted);
+                    if (parsed && parsed.handle === handleHex && typeof parsed.value === 'string') {
+                        setCachedDecryptedValue(BigInt(parsed.value));
+                    } else if (cachedHandle !== handleHex) {
+                        setCachedDecryptedValue(undefined);
+                    }
+                } catch {
+                    setCachedDecryptedValue(undefined);
+                }
+            } else if (cachedHandle !== handleHex) {
+                setCachedDecryptedValue(undefined);
+            }
+        } else if (cachedHandle !== handleHex) {
+            setCachedDecryptedValue(undefined);
+        }
+
+        if (cachedHandle !== handleHex) {
+            setCachedHandle(handleHex);
+        }
+    }, [balanceHandle, cachedHandle, cardAddress]);
+
+    useEffect(() => {
+        if (decryptedValue !== undefined && decryptedValue !== cachedDecryptedValue) {
+            setCachedDecryptedValue(decryptedValue);
+            // Persist to localStorage
+            if (typeof window !== 'undefined' && cardAddress && balanceHandle) {
+                const handleHex = typeof balanceHandle === 'string' ? balanceHandle : toHex(balanceHandle, { size: 32 });
+                window.localStorage.setItem(
+                    `payme.decryptedBalance.${cardAddress}`,
+                    JSON.stringify({ handle: handleHex, value: decryptedValue.toString() })
+                );
+            }
+        }
+    }, [decryptedValue, cachedDecryptedValue, cardAddress, balanceHandle]);
+
+    const effectiveValue = cachedDecryptedValue ?? decryptedValue;
+
     const formattedBalance = useMemo(() => {
-        if (decryptedValue === undefined) return '••••';
-        return (Number(decryptedValue) / 1000000).toFixed(2); // Assuming 6 decimals for cUSDC
-    }, [decryptedValue]);
+        if (effectiveValue === undefined) return '••••';
+        return (Number(effectiveValue) / 1000000).toFixed(2); // Assuming 6 decimals for cUSDC
+    }, [effectiveValue]);
 
     return {
         balanceHandle: balanceHandle as string | undefined,
@@ -186,6 +247,10 @@ export function useConfidentialBalance(cardAddress: Hex | undefined, ownerAddres
                 (typeof balanceHandle === 'bigint' && balanceHandle === 0n) ||
                 (typeof balanceHandle === 'string' && (balanceHandle === '0x' + '0'.repeat(64) || balanceHandle === '0x0'))
             ),
+        cachedDecryptedValue,
+        balanceHandle,
+        cachedHandle,
+        effectiveValue,
         wrapperAddress: cardCusdcAddress as Hex | undefined,
         hasSigner: !!decryptionSigner,
         decryptSignerAddress: serverSignerAddress,
