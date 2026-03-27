@@ -7,7 +7,7 @@ const MIN_BALANCE_WEI = TARGET_BALANCE_WEI;
 
 export async function POST(req: Request) {
   try {
-    const { account } = (await req.json()) as { account: Hex };
+    const { account, targetBalanceWei } = (await req.json()) as { account: Hex; targetBalanceWei?: string };
 
     if (!account) {
       return Response.json({ error: "account is required" }, { status: 400 });
@@ -26,15 +26,17 @@ export async function POST(req: Request) {
     });
 
     const balanceBefore = await PUBLIC_CLIENT.getBalance({ address: account });
+    const targetBalance = targetBalanceWei ? BigInt(targetBalanceWei) : TARGET_BALANCE_WEI;
+    const minBalance = targetBalance;
 
-    if (balanceBefore >= MIN_BALANCE_WEI) {
+    if (balanceBefore >= minBalance) {
       return Response.json({
         toppedUp: false,
         balanceBefore: balanceBefore.toString(),
       });
     }
 
-    const topUpAmount = TARGET_BALANCE_WEI - balanceBefore;
+    const topUpAmount = targetBalance - balanceBefore;
     const txHash = await walletClient.sendTransaction({
       to: account,
       value: topUpAmount,

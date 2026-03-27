@@ -11,7 +11,7 @@ contract CardFactory is ZamaEthereumConfig {
 
     event CardCreated(address indexed wallet, address card);
 
-    mapping(address => address) public userToCard;
+    mapping(address => address[]) public userToCards;
 
     constructor(address wrapper) {
         require(wrapper != address(0), "No cUSDC wrapper found");
@@ -19,14 +19,18 @@ contract CardFactory is ZamaEthereumConfig {
     }
 
     function createCard() external returns (address) {
-        require(userToCard[msg.sender] == address(0), "Card already exists");
         PrivateCard card = new PrivateCard(msg.sender, cUSDC);
-        userToCard[msg.sender] = address(card);
+        userToCards[msg.sender].push(address(card));
         emit CardCreated(msg.sender, address(card));
         return address(card);
     }
 
     function getCard(address wallet) external view returns (address) {
-        return userToCard[wallet];
+        address[] storage cards = userToCards[wallet];
+        return cards.length > 0 ? cards[0] : address(0);
+    }
+
+    function getCards(address wallet) external view returns (address[] memory) {
+        return userToCards[wallet];
     }
 }

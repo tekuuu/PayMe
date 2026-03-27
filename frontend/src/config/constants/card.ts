@@ -102,16 +102,35 @@ export const CARD_FACTORY_ABI = [
     "inputs": [
       {
         "internalType": "address",
-        "name": "",
+        "name": "wallet",
         "type": "address"
       }
     ],
-    "name": "userToCard",
+    "name": "getCards",
     "outputs": [
+      {
+        "internalType": "address[]",
+        "name": "",
+        "type": "address[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
       {
         "internalType": "address",
         "name": "",
         "type": "address"
+      }
+    ],
+    "name": "userToCards",
+    "outputs": [
+      {
+        "internalType": "address[]",
+        "name": "",
+        "type": "address[]"
       }
     ],
     "stateMutability": "view",

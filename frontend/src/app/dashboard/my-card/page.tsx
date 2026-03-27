@@ -12,7 +12,16 @@ import { usePrivateCard } from '@/hooks/use-private-card';
 
 export default function MyCardPage() {
     const { me } = useMe();
-    const { hasCard, cardAddress, isLoading, isCreating, createCard } = usePrivateCard(me || null);
+    const {
+        cardAddresses,
+        selectedCardAddress,
+        selectedCardIndex,
+        setSelectedCardIndex,
+        hasCard,
+        isLoading,
+        isCreating,
+        createCard,
+    } = usePrivateCard(me || null);
 
     if (!me) {
         return (
@@ -49,7 +58,39 @@ export default function MyCardPage() {
                             <span className="animate-spin w-8 h-8 rounded-full border-4 border-primary border-t-transparent" />
                         </div>
                     ) : hasCard ? (
-                        <CardOverview address={me.account as Hex} cardAddress={cardAddress} />
+                        <>
+                            <div className="mb-4 rounded-xl border border-border bg-card p-4 shadow-sm">
+                                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                    <div className="w-full md:w-2/3">
+                                        <label htmlFor="card-select" className="block text-sm font-medium text-muted-foreground mb-1">
+                                            Selected Card
+                                        </label>
+                                        <select
+                                            id="card-select"
+                                            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring focus:ring-primary/30"
+                                            value={selectedCardIndex}
+                                            onChange={(e) => setSelectedCardIndex(Number(e.target.value))}
+                                        >
+                                            {cardAddresses.map((address, index) => (
+                                                <option key={address} value={index}>
+                                                    {address}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <button
+                                        className="mt-2 w-full rounded-lg border border-primary bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 md:mt-0 md:w-auto"
+                                        onClick={() => createCard()}
+                                        disabled={isCreating}
+                                    >
+                                        {isCreating ? 'Creating...' : 'Create another card'}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <CardOverview address={me.account as Hex} cardAddress={selectedCardAddress} />
+                        </>
                     ) : (
                         <CreateCardEmptyState onCreate={createCard} isCreating={isCreating} />
                     )}

@@ -79,7 +79,7 @@ export class UserOpBuilder {
     });
 
     let initCode = toHex(new Uint8Array(0));
-    if (bytecode === undefined) {
+    if (!bytecode || bytecode === "0x" || bytecode === "0x0") {
       ({ initCode } = await this._createInitCode(publicKey));
     }
 
@@ -163,17 +163,12 @@ export class UserOpBuilder {
   }
 
   private _addCallData(calls: Call[]): Hex {
-    if (calls.length === 1) {
-      return encodeFunctionData({
-        abi: parseAbi(["function execute(address dest, uint256 value, bytes calldata func) external"]),
-        functionName: "execute",
-        args: [calls[0].dest, calls[0].value, calls[0].data],
-      });
-    }
+    // SimpleAccount expects executeBatch(Call[] calldata calls).
+    const callTuples = calls.map((c) => [c.dest, c.value, c.data] as [Hex, bigint, Hex]);
     return encodeFunctionData({
-      abi: parseAbi(["function executeBatch(address[] calldata dest, uint256[] calldata value, bytes[] calldata func) external"]),
+      abi: parseAbi(["function executeBatch((address,uint256,bytes)[] calldata calls) external"]),
       functionName: "executeBatch",
-      args: [calls.map((c) => c.dest), calls.map((c) => c.value), calls.map((c) => c.data)],
+      args: [callTuples],
     });
   }
 }
