@@ -4,9 +4,10 @@ import React from 'react';
 import { SidebarTrigger } from '../ui/sidebar';
 import { UserNav } from './user-nav';
 import { useFhevmContext } from '@/providers/fhevm-provider';
+import { toast } from 'sonner';
 
 export default function Header() {
-  const { status } = useFhevmContext();
+  const { status, refresh } = useFhevmContext();
 
   const fheLabel = status === 'ready'
     ? 'FHE Ready'
@@ -30,6 +31,15 @@ export default function Header() {
         <span className={`hidden md:inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${fheClass}`}>
           {fheLabel}
         </span>
+        <button
+          className='hidden md:inline-flex rounded-md border border-slate-200/10 bg-slate-700/80 px-2 py-1 text-xs font-medium text-white transition hover:bg-slate-600/80'
+          onClick={() => {
+            toast.info('Refreshing FHE engine...');
+            refresh();
+          }}
+        >
+          Refresh FHE
+        </button>
         <UserNav />
       </div>
     </header>

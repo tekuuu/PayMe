@@ -52,11 +52,12 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
         usingServerSigner,
         serverSignerError,
         hasFheInstance,
-    } = useConfidentialBalance(cardAddress);
+    } = useConfidentialBalance(cardAddress, me?.account as Hex);
 
     const [isFunding, setIsFunding] = useState(false);
     const [fundAmount, setFundAmount] = useState('');
     const [isSending, setIsSending] = useState(false);
+    const [isDecryptInProgress, setIsDecryptInProgress] = useState(false);
     const [sendTo, setSendTo] = useState('');
     const [sendAmount, setSendAmount] = useState('');
     const [showSendForm, setShowSendForm] = useState(false);
@@ -123,10 +124,12 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
     };
 
     const handleDecryptBalance = async () => {
+        setIsDecryptInProgress(true);
         await refreshConfidentialBalance();
 
         if (!hasFheInstance) {
             toast.info('FHE engine is still initializing. Please retry in a few seconds.');
+            setIsDecryptInProgress(false);
             return;
         }
 
@@ -194,7 +197,11 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
             toast.info('Decrypting via relayer-compatible signer (passkey wallet remains active for card ownership).');
         }
 
-        decrypt();
+        try {
+            await decrypt();
+        } finally {
+            setIsDecryptInProgress(false);
+        }
     };
 
     const handleSendConfidential = async () => {
@@ -406,6 +413,8 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
             await smartWallet.waitForUserOperationReceipt({ hash: aclSyncHash });
 
             await refreshConfidentialBalance();
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await refreshConfidentialBalance();
 
             toast.success(`Successfully funded card with ${fundAmount} ${symbol}!`);
             setFundAmount('');
@@ -474,18 +483,27 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
 
                     <div className="flex items-center justify-between rounded-xl border border-primary/30 bg-primary/10 p-3">
                         <div>
-                            <p className="text-xs uppercase text-primary/80">Private balance</p>
+                            <div className="flex items-center gap-2">
+                                <p className="text-xs uppercase text-primary/80">Private balance</p>
+                                {(isDecrypting || isDecryptInProgress) && (
+                                    <span className="rounded-full bg-slate-800 px-2 py-1 text-[10px] font-semibold text-white">
+                                        Decrypting...
+                                    </span>
+                                )}
+                            </div>
                             <p className="text-xl font-bold tracking-tight md:text-2xl">{formattedBalance}</p>
                         </div>
-                        <Button
-                            size="sm"
-                            className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-                            onClick={handleDecryptBalance}
-                            disabled={isDecrypting}
-                        >
-                            <IconEye size={16} />
-                            {isDecrypting ? 'Decrypting...' : 'Decrypt'}
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                size="sm"
+                                className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+                                onClick={handleDecryptBalance}
+                                disabled={isDecrypting || isDecryptInProgress}
+                            >
+                                <IconEye size={16} />
+                                {isDecrypting || isDecryptInProgress ? 'Decrypting...' : 'Decrypt'}
+                            </Button>
+                        </div>
                     </div>
 
                     <div className="rounded-xl border border-white/10 bg-white/5 p-3">

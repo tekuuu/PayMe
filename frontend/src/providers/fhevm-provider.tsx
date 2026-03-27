@@ -10,12 +10,14 @@ interface FhevmContextType {
     instance: FhevmInstance | undefined;
     status: string;
     error: Error | undefined;
+    refresh: () => void;
 }
 
 const FhevmContext = createContext<FhevmContextType>({
     instance: undefined,
     status: 'idle',
     error: undefined,
+    refresh: () => {},
 });
 
 export function FhevmProvider({ children }: { children: React.ReactNode }) {
@@ -35,14 +37,14 @@ export function FhevmProvider({ children }: { children: React.ReactNode }) {
 
     const chainId = chain?.id ?? walletClient?.chain?.id ?? CHAIN.id;
 
-    const { instance, status, error } = useFhevm({
+    const { instance, status, error, refresh } = useFhevm({
         provider,
         chainId,
         enabled: !!chainId,
     });
 
     return (
-        <FhevmContext.Provider value={{ instance, status, error }}>
+        <FhevmContext.Provider value={{ instance, status, error, refresh }}>
             {children}
         </FhevmContext.Provider>
     );

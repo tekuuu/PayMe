@@ -26,10 +26,6 @@ export function usePrivateCard(me: Me | null) {
         query: {
             enabled: !!me?.account && me.account !== zeroAddress,
             staleTime: 5000,
-        },
-        onError() {
-            // Fallback to old single-card contract interface when getCards() is not available.
-            return;
         }
     });
 
@@ -50,6 +46,8 @@ export function usePrivateCard(me: Me | null) {
             ? [(cardAddressSingle as Hex)]
             : [];
     const [selectedCardIndex, setSelectedCardIndex] = useState(0);
+    const selectedCardAddress = cardAddresses.length > 0 ? cardAddresses[selectedCardIndex] : undefined;
+    const hasCard = cardAddresses.length > 0;
 
     useEffect(() => {
         if (cardAddresses.length === 0) {
@@ -61,8 +59,13 @@ export function usePrivateCard(me: Me | null) {
         }
     }, [cardAddresses, selectedCardIndex]);
 
-    const selectedCardAddress = cardAddresses.length > 0 ? cardAddresses[selectedCardIndex] : undefined;
-    const hasCard = cardAddresses.length > 0;
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            (window as any).appBuilder = builder;
+            (window as any).appCardAddresses = cardAddresses;
+            (window as any).appSelectedCardAddress = selectedCardAddress;
+        }
+    }, [builder, cardAddresses, selectedCardAddress]);
 
     const createCard = useCallback(async () => {
         if (!me) return;

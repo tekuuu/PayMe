@@ -2,11 +2,12 @@
 
 import { useMemo, useEffect, useState, useCallback } from 'react';
 import { useReadContract } from 'wagmi';
-import { Hex, isAddress, zeroAddress } from 'viem';
+import { Hex, isAddress, zeroAddress, toHex } from 'viem';
 import { PRIVATE_CARD_ABI } from '@/config/constants';
 import { useFhevmContext } from '@/providers/fhevm-provider';
 import { useFHEDecrypt, useInMemoryStorage } from '@/lib/fhevm-sdk/react';
 import { useWagmiEthers } from './use-wagmi-ethers';
+import { useMe } from '@/providers/auth-provider';
 
 const WRAPPER_READ_ABI = [
     {
@@ -18,10 +19,13 @@ const WRAPPER_READ_ABI = [
     }
 ] as const;
 
-export function useConfidentialBalance(cardAddress: Hex | undefined) {
+export function useConfidentialBalance(cardAddress: Hex | undefined, ownerAddress: Hex | undefined) {
+    const { me } = useMe();
     const { instance } = useFhevmContext();
     const { ethersSigner, chainId } = useWagmiEthers();
     const { storage: fhevmDecryptionSignatureStorage } = useInMemoryStorage();
+
+    const callerAddress = ownerAddress || (me?.account as Hex | undefined);
     const [serverSignerAddress, setServerSignerAddress] = useState<Hex | undefined>(undefined);
     const [serverSignerError, setServerSignerError] = useState<string | null>(null);
 
@@ -111,14 +115,29 @@ export function useConfidentialBalance(cardAddress: Hex | undefined) {
         abi: [{ name: 'getEncryptedBalance', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] }],
         functionName: 'getEncryptedBalance',
         args: [],
+        // ensure read contract uses owner address so the `Only wallet` guard passes
+        account: callerAddress,
         query: {
-            enabled: !!cardAddress,
+            enabled: !!cardAddress && !!callerAddress,
         }
     });
 
     const requests = useMemo(() => {
-        if (!cardCusdcAddress || !balanceHandle || (balanceHandle as string) === '0x' + '0'.repeat(64)) return undefined;
-        return [{ handle: balanceHandle as string, contractAddress: cardAddress as Hex }];
+        if (!cardCusdcAddress || !balanceHandle) return undefined;
+
+        let handleHex: string | undefined;
+
+        if (typeof balanceHandle === 'bigint') {
+            if (balanceHandle === 0n) return undefined;
+            handleHex = toHex(balanceHandle, { size: 32 });
+        } else if (typeof balanceHandle === 'string') {
+            if (balanceHandle === '0x' + '0'.repeat(64) || balanceHandle === '0x0') return undefined;
+            handleHex = balanceHandle;
+        }
+
+        if (!handleHex) return undefined;
+
+        return [{ handle: handleHex, contractAddress: cardAddress as Hex }];
     }, [cardAddress, cardCusdcAddress, balanceHandle]);
 
     // 2. Decrypt the balance handle
@@ -139,10 +158,15 @@ export function useConfidentialBalance(cardAddress: Hex | undefined) {
     const decryptedValue = useMemo(() => {
         if (!balanceHandle) return undefined;
 
-        const exact = results[balanceHandle as string];
+        const balanceKey =
+            typeof balanceHandle === 'string'
+                ? balanceHandle
+                : toHex(balanceHandle, { size: 32 });
+
+        const exact = results[balanceKey];
         if (typeof exact !== 'undefined') return exact as bigint;
 
-        const normalizedKey = (balanceHandle as string).toLowerCase();
+        const normalizedKey = balanceKey.toLowerCase();
         const normalizedMatch = Object.entries(results).find(([k]) => k.toLowerCase() === normalizedKey);
         if (!normalizedMatch) return undefined;
 
@@ -156,7 +180,12 @@ export function useConfidentialBalance(cardAddress: Hex | undefined) {
 
     return {
         balanceHandle: balanceHandle as string | undefined,
-        hasEncryptedHandle: !!balanceHandle && (balanceHandle as string) !== '0x' + '0'.repeat(64),
+        hasEncryptedHandle:
+            !!balanceHandle &&
+            !(
+                (typeof balanceHandle === 'bigint' && balanceHandle === 0n) ||
+                (typeof balanceHandle === 'string' && (balanceHandle === '0x' + '0'.repeat(64) || balanceHandle === '0x0'))
+            ),
         wrapperAddress: cardCusdcAddress as Hex | undefined,
         hasSigner: !!decryptionSigner,
         decryptSignerAddress: serverSignerAddress,
