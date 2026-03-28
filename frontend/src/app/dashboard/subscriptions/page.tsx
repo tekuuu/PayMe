@@ -200,7 +200,7 @@ async function diagnoseEncryptedHandleRevert(args: {
 }) {
     const { cardAddress, signer, merchant, periodSeconds } = args;
     try {
-        const zeroHandle = (`0x${'00'.repeat(32)}`) as Hex;
+        const zeroHandle = 0n;
         const zeroCallData = encodeFunctionData({
             abi: PRIVATE_CARD_ABI,
             functionName: 'approveSubscription',
@@ -221,7 +221,7 @@ async function diagnoseEncryptedHandleRevert(args: {
 
 export default function SubscriptionsPage() {
     const { me } = useMe();
-    const { cardAddress, hasCard, isLoading, isCreating, createCard } = usePrivateCard(me || null);
+    const { selectedCardAddress: cardAddress, hasCard, isLoading, isCreating, createCard } = usePrivateCard(me || null);
     const { instance } = useFhevmContext();
     const builder = useMemo(() => new UserOpBuilder(CHAIN), []);
 
@@ -356,7 +356,7 @@ export default function SubscriptionsPage() {
                 data: encodeFunctionData({
                     abi: PRIVATE_CARD_ABI,
                     functionName: 'approveSubscription',
-                    args: [merchant as Hex, toHex(handles[0]), periodSeconds],
+                    args: [merchant as Hex, BigInt(toHex(handles[0])), periodSeconds],
                 }),
             };
 

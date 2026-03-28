@@ -248,7 +248,6 @@ export function useConfidentialBalance(cardAddress: Hex | undefined, ownerAddres
                 (typeof balanceHandle === 'string' && (balanceHandle === '0x' + '0'.repeat(64) || balanceHandle === '0x0'))
             ),
         cachedDecryptedValue,
-        balanceHandle,
         cachedHandle,
         effectiveValue,
         wrapperAddress: cardCusdcAddress as Hex | undefined,

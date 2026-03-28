@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 pragma solidity ^0.8.24;
 
-import {FHE, euint64, ebool} from "@fhevm/solidity/lib/FHE.sol";
+import {FHE, externalEuint64, euint64, ebool} from "@fhevm/solidity/lib/FHE.sol";
 import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 
 interface IERC7984 {
     function confidentialTransfer(address to, euint64 encryptedAmount) external;
+    function confidentialTransfer(address to, externalEuint64 encryptedAmount, bytes calldata inputProof) external;
     function confidentialBalanceOf(address account) external view returns (euint64);
 }
 
@@ -49,6 +50,30 @@ contract PrivateCard is ZamaEthereumConfig {
         _syncOwnerBalanceAcl();
 
         emit ConfidentialTransfer(to, encryptedAmount);
+    }
+
+    function transferWithProof(
+        address to,
+        externalEuint64 encryptedAmount,
+        bytes calldata inputProof
+    ) external {
+        require(
+            msg.sender == owner || FHE.isInitialized(subscriptions[msg.sender].maxPerPeriod),
+            "Unauthorized"
+        );
+
+        // Forward the proof-authorized transfer to cUSDC.
+        IERC7984(cUSDC).confidentialTransfer(to, encryptedAmount, inputProof);
+
+        euint64 decodedAmount = FHE.fromExternal(encryptedAmount, inputProof);
+
+        if (FHE.isInitialized(subscriptions[msg.sender].maxPerPeriod)) {
+            _updateSubscriptionSpent(msg.sender, decodedAmount);
+        }
+
+        _syncOwnerBalanceAcl();
+
+        emit ConfidentialTransfer(to, decodedAmount);
     }
 
     // ── Approve subscription limit (only wallet) ────────────────────────────────

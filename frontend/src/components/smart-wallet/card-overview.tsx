@@ -205,14 +205,40 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
     };
 
     const handleSendConfidential = async () => {
-        if (!me || !cardAddress || !instance || !ethersSigner || !sendTo || !sendAmount || !cardCusdcAddress) {
-            toast.error("Missing required information for transaction");
+        if (!me) {
+            toast.error("User session not found. Please reconnect your wallet.");
+            return;
+        }
+        if (!cardAddress) {
+            toast.error("Card address is missing.");
+            return;
+        }
+        if (!instance) {
+            toast.error("FHE instance is not ready. Please refresh FHE and try again.");
+            return;
+        }
+        if (!sendTo || sendTo.trim().length === 0) {
+            toast.error("Recipient address is required.");
+            return;
+        }
+        if (!sendAmount || isNaN(Number(sendAmount)) || Number(sendAmount) <= 0) {
+            toast.error("Enter a valid amount to send.");
+            return;
+        }
+        if (!cardCusdcAddress) {
+            toast.error("Card cUSDC address is not available yet. Please retry in a moment.");
             return;
         }
 
         setIsSending(true);
         try {
-            const amountRaw = parseUnits(sendAmount, 6);
+            let amountRaw: bigint;
+            try {
+                amountRaw = parseUnits(sendAmount, 6);
+            } catch {
+                toast.error("Invalid amount format.");
+                return;
+            }
 
             toast.info("Encrypting payment details locally...");
 
@@ -223,14 +249,16 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
 
             smartWallet.init();
 
-            // 2. Build UserOp for call to card.transfer(to, encryptedAmount)
+            // 2. Build UserOp for call to card.transferWithProof(to, encryptedAmount, inputProof)
+            const inputProofHex = `0x${Array.from(inputProof).map((byte) => byte.toString(16).padStart(2, '0')).join('')}` as Hex;
+
             const call = {
                 dest: cardAddress,
                 value: 0n,
                 data: encodeFunctionData({
                     abi: PRIVATE_CARD_ABI,
-                    functionName: 'transfer',
-                    args: [sendTo as Hex, toHex(handles[0])] // The handle is what we pass to the contract
+                    functionName: 'transferWithProof',
+                    args: [sendTo as Hex, toHex(handles[0]), inputProofHex]
                 })
             };
 
@@ -243,7 +271,16 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
             // 4. Send and wait
             const hash = await smartWallet.sendUserOperation({ userOp });
             toast.info("Sending confidential payment...");
-            await smartWallet.waitForUserOperationReceipt({ hash });
+            const receipt = await smartWallet.waitForUserOperationReceipt({ hash });
+
+            if (!receipt || receipt.success === false || receipt.receipt?.status !== '0x1') {
+                const reason = receipt?.receipt?.revertReason || 'unknown';
+                throw new Error(`Confidential transfer failed: success=${receipt?.success ?? 'null'} status=${receipt?.receipt?.status ?? 'null'} reason=${reason}`);
+            }
+
+            await refreshConfidentialBalance();
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+            await refreshConfidentialBalance();
 
             toast.success(`Successfully sent ${sendAmount} cUSDC privately!`);
             setShowSendForm(false);
@@ -251,7 +288,11 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
             setSendTo('');
         } catch (error: any) {
             console.error("Confidential transfer failed:", error);
-            toast.error(error?.message || "Transfer failed");
+            if (error?.message?.includes('invalid address')) {
+                toast.error("Invalid recipient address.");
+            } else {
+                toast.error(error?.message || "Transfer failed");
+            }
         } finally {
             setIsSending(false);
         }
@@ -389,7 +430,11 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
 
             toast.info('Wrapping into confidential balance...');
             const wrapHash = await smartWallet.sendUserOperation({ userOp: wrapUserOp });
-            await smartWallet.waitForUserOperationReceipt({ hash: wrapHash });
+            const wrapReceipt = await smartWallet.waitForUserOperationReceipt({ hash: wrapHash });
+            if (!wrapReceipt || wrapReceipt.success === false || wrapReceipt.receipt?.status !== '0x1') {
+                const reason = wrapReceipt?.receipt?.revertReason || 'unknown';
+                throw new Error(`Wrap failed: success=${wrapReceipt?.success ?? 'null'} status=${wrapReceipt?.receipt?.status ?? 'null'} reason=${reason}`);
+            }
 
             // Step 3: Sync ACL so owner can decrypt the current balance handle.
             const aclSyncCall = {
