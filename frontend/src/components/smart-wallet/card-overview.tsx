@@ -46,7 +46,6 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
         canDecrypt,
         refresh: refreshConfidentialBalance,
         decryptError,
-        hasEncryptedHandle,
         hasSigner,
         decryptSignerAddress,
         usingServerSigner,
@@ -58,6 +57,7 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
     const [fundAmount, setFundAmount] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [isDecryptInProgress, setIsDecryptInProgress] = useState(false);
+    const [pendingDecryptAfterSync, setPendingDecryptAfterSync] = useState(false);
     const [sendTo, setSendTo] = useState('');
     const [sendAmount, setSendAmount] = useState('');
     const [showSendForm, setShowSendForm] = useState(false);
@@ -109,6 +109,16 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
         }
     }, [decryptError]);
 
+    useEffect(() => {
+        if (!pendingDecryptAfterSync || isDecrypting || !canDecrypt) {
+            return;
+        }
+
+        setPendingDecryptAfterSync(false);
+        decrypt();
+        setIsDecryptInProgress(false);
+    }, [canDecrypt, decrypt, isDecrypting, pendingDecryptAfterSync]);
+
     const handleCopy = async (value: string | undefined, label: string) => {
         if (!value) {
             toast.error(`${label} is not available yet.`);
@@ -133,75 +143,84 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
             return;
         }
 
-        if (!hasEncryptedHandle) {
-            toast.info('No encrypted cUSDC balance yet. Fund the card first.');
-            return;
-        }
-
         if (!hasSigner) {
             toast.error(serverSignerError || 'Decrypt signer is not ready yet. Please retry in a moment.');
             return;
         }
 
-        if (!canDecrypt) {
-            toast.info('Preparing decryption request.');
+        if (!me || !cardAddress) {
+            toast.error('Card session is not ready yet. Please retry in a moment.');
+            setIsDecryptInProgress(false);
             return;
         }
 
-        if (me && cardAddress) {
-            try {
-                smartWallet.init();
+        try {
+            smartWallet.init();
 
-                const aclSyncCalls = [] as Array<{ dest: Hex; value: bigint; data: Hex }>;
+            const aclSyncCalls = [] as Array<{ dest: Hex; value: bigint; data: Hex }>;
 
+            aclSyncCalls.push({
+                dest: cardAddress,
+                value: 0n,
+                data: encodeFunctionData({
+                    abi: PRIVATE_CARD_ABI,
+                    functionName: 'syncOwnerBalanceAcl',
+                    args: []
+                })
+            });
+
+            if (decryptSignerAddress && decryptSignerAddress.toLowerCase() !== me.account.toLowerCase()) {
                 aclSyncCalls.push({
                     dest: cardAddress,
                     value: 0n,
                     data: encodeFunctionData({
                         abi: PRIVATE_CARD_ABI,
-                        functionName: 'syncOwnerBalanceAcl',
-                        args: []
+                        functionName: 'syncBalanceAcl',
+                        args: [decryptSignerAddress]
                     })
                 });
-
-                if (decryptSignerAddress && decryptSignerAddress.toLowerCase() !== me.account.toLowerCase()) {
-                    aclSyncCalls.push({
-                        dest: cardAddress,
-                        value: 0n,
-                        data: encodeFunctionData({
-                            abi: PRIVATE_CARD_ABI,
-                            functionName: 'syncBalanceAcl',
-                            args: [decryptSignerAddress]
-                        })
-                    });
-                }
-
-                const aclSyncUserOp = await builder.buildUserOp({
-                    calls: aclSyncCalls,
-                    keyId: me.keyId
-                });
-
-                const aclSyncHash = await smartWallet.sendUserOperation({ userOp: aclSyncUserOp });
-                await smartWallet.waitForUserOperationReceipt({ hash: aclSyncHash });
-                await refreshConfidentialBalance();
-
-                // Allow a short propagation window so relayer-side simulation sees updated ACL state.
-                await new Promise((resolve) => setTimeout(resolve, 3000));
-            } catch (e: any) {
-                toast.error(e?.message || 'Failed to sync ACL for decrypt signer');
-                return;
             }
+
+            const aclSyncUserOp = await builder.buildUserOp({
+                calls: aclSyncCalls,
+                keyId: me.keyId
+            });
+
+            const aclSyncHash = await smartWallet.sendUserOperation({ userOp: aclSyncUserOp });
+            await smartWallet.waitForUserOperationReceipt({ hash: aclSyncHash });
+            await refreshConfidentialBalance();
+
+            // Allow a short propagation window so relayer-side simulation sees updated ACL state.
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+        } catch (e: any) {
+            toast.error(e?.message || 'Failed to sync ACL for decrypt signer');
+            setIsDecryptInProgress(false);
+            return;
         }
 
         if (usingServerSigner) {
             toast.info('Decrypting via relayer-compatible signer (passkey wallet remains active for card ownership).');
         }
 
-        try {
-            await decrypt();
-        } finally {
+        const latestBalanceHandle = await builder.publicClient.readContract({
+            address: cardAddress as Hex,
+            abi: PRIVATE_CARD_ABI,
+            functionName: 'getEncryptedBalance',
+            account: me.account as Hex,
+        }) as bigint | Hex;
+
+        const latestHandleIsZero =
+            typeof latestBalanceHandle === 'bigint'
+                ? latestBalanceHandle === 0n
+                : latestBalanceHandle === '0x' + '0'.repeat(64) || latestBalanceHandle === '0x0';
+
+        if (latestHandleIsZero) {
+            toast.info('No encrypted cUSDC balance yet. Fund the card first.');
             setIsDecryptInProgress(false);
+            return;
         }
+
+        setPendingDecryptAfterSync(true);
     };
 
     const handleSendConfidential = async () => {
