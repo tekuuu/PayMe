@@ -225,11 +225,6 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
             toast.error("Enter a valid amount to send.");
             return;
         }
-        if (!cardCusdcAddress) {
-            toast.error("Card cUSDC address is not available yet. Please retry in a moment.");
-            return;
-        }
-
         setIsSending(true);
         try {
             let amountRaw: bigint;
@@ -242,8 +237,9 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
 
             toast.info("Encrypting payment details locally...");
 
-            // 1. Create encrypted input for the cUSDC contract
-            const input = instance.createEncryptedInput(cardCusdcAddress as Hex, me.account as Hex);
+            // 1. Create encrypted input for the PrivateCard contract.
+            // The card consumes the proof before forwarding the transfer to cUSDC.
+            const input = instance.createEncryptedInput(cardAddress, me.account as Hex);
             input.add64(amountRaw);
             const { handles, inputProof } = await input.encrypt();
 

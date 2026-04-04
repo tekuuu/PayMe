@@ -1,3 +1,5 @@
+<img src="./frontend/public/assets/payme.svg" alt="PayMe Logo" width="200"/>
+
 # PayMe 💳🔒
 
 **PayMe** is a next-generation payments application that combines **Account Abstraction (ERC-4337)** and **Fully Homomorphic Encryption (FHE)** to deliver a seamless, gas-abstracted, and fully confidential decentralized finance experience.

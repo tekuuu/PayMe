@@ -401,5 +401,28 @@ export const PRIVATE_CARD_ABI = [
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "to",
+                "type": "address"
+            },
+            {
+                "internalType": "externalEuint64",
+                "name": "encryptedAmount",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "bytes",
+                "name": "inputProof",
+                "type": "bytes"
+            }
+        ],
+        "name": "transferWithProof",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
     }
 ] as const;

@@ -34,6 +34,12 @@ contract PrivateCard is ZamaEthereumConfig {
         cUSDC = _cUSDC;
     }
 
+    function _sendConfidential(address to, euint64 amount) internal {
+        FHE.allowThis(amount);
+        FHE.allowTransient(amount, address(cUSDC));
+        IERC7984(cUSDC).confidentialTransfer(to, amount);
+    }
+
     // ── Send (user or approved subscription merchant) ────────────────────────────
     function transfer(address to, euint64 encryptedAmount) external {
         require(
@@ -41,7 +47,7 @@ contract PrivateCard is ZamaEthereumConfig {
             "Unauthorized"
         );
 
-        IERC7984(cUSDC).confidentialTransfer(to, encryptedAmount);
+        _sendConfidential(to, encryptedAmount);
 
         if (FHE.isInitialized(subscriptions[msg.sender].maxPerPeriod)) {
             _updateSubscriptionSpent(msg.sender, encryptedAmount);
@@ -62,10 +68,8 @@ contract PrivateCard is ZamaEthereumConfig {
             "Unauthorized"
         );
 
-        // Forward the proof-authorized transfer to cUSDC.
-        IERC7984(cUSDC).confidentialTransfer(to, encryptedAmount, inputProof);
-
         euint64 decodedAmount = FHE.fromExternal(encryptedAmount, inputProof);
+        _sendConfidential(to, decodedAmount);
 
         if (FHE.isInitialized(subscriptions[msg.sender].maxPerPeriod)) {
             _updateSubscriptionSpent(msg.sender, decodedAmount);
@@ -116,7 +120,7 @@ contract PrivateCard is ZamaEthereumConfig {
         );
         euint64 allowed = FHE.select(withinLimit, encryptedAmount, FHE.asEuint64(0));
 
-        IERC7984(cUSDC).confidentialTransfer(msg.sender, allowed);
+        _sendConfidential(msg.sender, allowed);
         sub.spentThisPeriod = FHE.add(sub.spentThisPeriod, allowed);
 
         _syncOwnerBalanceAcl();

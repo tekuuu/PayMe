@@ -17,7 +17,11 @@ const META_THEME_COLORS = {
 
 export const metadata: Metadata = {
   title: 'PayMe Private Card',
-  description: 'Private Card system on Zama FHEVM'
+  description: 'Private Card system on Zama FHEVM',
+  icons: {
+    icon: '/assets/favicon.ico',
+    apple: '/assets/apple-touch-icon.png',
+  },
 };
 
 export const viewport: Viewport = {
