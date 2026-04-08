@@ -6,8 +6,7 @@ import {
     IconEye,
     IconCopy,
     IconWallet,
-    IconSend,
-    IconCreditCard
+    IconSend
 } from '@tabler/icons-react';
 import { Hex, encodeFunctionData, parseUnits, toHex } from 'viem';
 import { toast } from 'sonner';
@@ -15,9 +14,9 @@ import { useConfidentialBalance } from '@/hooks/use-confidential-balance';
 import { CHAIN } from '@/config/constants';
 import { smartWallet } from '@/lib/smart-wallet';
 import { UserOpBuilder } from '@/lib/smart-wallet/service/userOps';
+import { ensureUserOpPrefund } from '@/lib/smart-wallet/service/userOps/prefund';
 import { useMe } from '@/providers/auth-provider';
 import { useFhevmContext } from '@/providers/fhevm-provider';
-import { useWagmiEthers } from '@/hooks/use-wagmi-ethers';
 import { PRIVATE_CARD_ABI } from '@/config/constants';
 import { useReadContract } from 'wagmi';
 
@@ -37,8 +36,26 @@ const ERC20_READ_ABI = [
     { name: 'decimals', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] }
 ] as const;
 
-export function CardOverview({ address, cardAddress }: { address: Hex | undefined; cardAddress: Hex | undefined }) {
+function sameAddress(left?: string, right?: string) {
+    return !!left && !!right && left.toLowerCase() === right.toLowerCase();
+}
+
+function shortenAddress(address: string) {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+export function CardOverview({ cardAddress }: { cardAddress: Hex | undefined }) {
     const { me } = useMe();
+
+    const { data: cardOwnerAddress } = useReadContract({
+        address: cardAddress,
+        abi: PRIVATE_CARD_ABI,
+        functionName: 'owner',
+        query: {
+            enabled: !!cardAddress,
+        }
+    });
+
     const {
         formattedBalance,
         isDecrypting,
@@ -51,7 +68,7 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
         usingServerSigner,
         serverSignerError,
         hasFheInstance,
-    } = useConfidentialBalance(cardAddress, me?.account as Hex);
+    } = useConfidentialBalance(cardAddress, cardOwnerAddress as Hex | undefined);
 
     const [isFunding, setIsFunding] = useState(false);
     const [fundAmount, setFundAmount] = useState('');
@@ -63,7 +80,6 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
     const [showSendForm, setShowSendForm] = useState(false);
 
     const { instance } = useFhevmContext();
-    const { ethersSigner } = useWagmiEthers();
 
     const { data: cardCusdcAddress } = useReadContract({
         address: cardAddress,
@@ -102,6 +118,11 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
     });
 
     const builder = useMemo(() => new UserOpBuilder(CHAIN), []);
+    const resolvedOwnerAddress = cardOwnerAddress as Hex | undefined;
+    const isCurrentUserOwner = sameAddress(me?.account, resolvedOwnerAddress);
+    const ownerGuardMessage = resolvedOwnerAddress && !isCurrentUserOwner
+        ? `This card belongs to ${shortenAddress(resolvedOwnerAddress)}. Decrypt, funding, and private send stay locked until that owner wallet signs in.`
+        : null;
 
     useEffect(() => {
         if (decryptError) {
@@ -118,6 +139,12 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
         decrypt();
         setIsDecryptInProgress(false);
     }, [canDecrypt, decrypt, isDecrypting, pendingDecryptAfterSync]);
+
+    useEffect(() => {
+        if (!isCurrentUserOwner) {
+            setShowSendForm(false);
+        }
+    }, [isCurrentUserOwner]);
 
     const handleCopy = async (value: string | undefined, label: string) => {
         if (!value) {
@@ -145,11 +172,24 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
 
         if (!hasSigner) {
             toast.error(serverSignerError || 'Decrypt signer is not ready yet. Please retry in a moment.');
+            setIsDecryptInProgress(false);
             return;
         }
 
         if (!me || !cardAddress) {
             toast.error('Card session is not ready yet. Please retry in a moment.');
+            setIsDecryptInProgress(false);
+            return;
+        }
+
+        if (!resolvedOwnerAddress) {
+            toast.error('Card owner is still loading. Please retry in a moment.');
+            setIsDecryptInProgress(false);
+            return;
+        }
+
+        if (!isCurrentUserOwner) {
+            toast.error('Only the card owner can decrypt this balance.');
             setIsDecryptInProgress(false);
             return;
         }
@@ -184,6 +224,11 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
             const aclSyncUserOp = await builder.buildUserOp({
                 calls: aclSyncCalls,
                 keyId: me.keyId
+            });
+
+            await ensureUserOpPrefund({
+                account: me.account as Hex,
+                userOp: aclSyncUserOp,
             });
 
             const aclSyncHash = await smartWallet.sendUserOperation({ userOp: aclSyncUserOp });
@@ -230,6 +275,14 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
         }
         if (!cardAddress) {
             toast.error("Card address is missing.");
+            return;
+        }
+        if (!resolvedOwnerAddress) {
+            toast.error('Card owner is still loading. Please retry in a moment.');
+            return;
+        }
+        if (!isCurrentUserOwner) {
+            toast.error('Only the card owner can send funds from this card.');
             return;
         }
         if (!instance) {
@@ -316,6 +369,14 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
     const handleFundCard = async () => {
         if (!me || !cardAddress || !cardCusdcAddress || !underlyingTokenAddress) {
             toast.error('Card wrapper address is not available yet. Please retry in a moment.');
+            return;
+        }
+        if (!resolvedOwnerAddress) {
+            toast.error('Card owner is still loading. Please retry in a moment.');
+            return;
+        }
+        if (!isCurrentUserOwner) {
+            toast.error('Only the card owner can fund this card.');
             return;
         }
 
@@ -527,12 +588,12 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
                         <div>
                             <p className="text-xs uppercase text-slate-400">Owner</p>
                             <div className="mt-1 flex items-start justify-between gap-2">
-                                <p className="font-mono text-xs break-all">{me?.account || 'Not available'}</p>
+                                <p className="font-mono text-xs break-all">{resolvedOwnerAddress || 'Loading owner...'}</p>
                                 <Button
                                     size="icon"
                                     variant="ghost"
                                     className="h-7 w-7 text-slate-300 hover:bg-white/10 hover:text-white"
-                                    onClick={() => handleCopy(me?.account, 'Owner address')}
+                                    onClick={() => handleCopy(resolvedOwnerAddress, 'Owner address')}
                                     aria-label="Copy owner address"
                                 >
                                     <IconCopy size={14} />
@@ -540,6 +601,12 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
                             </div>
                         </div>
                     </div>
+
+                    {ownerGuardMessage ? (
+                        <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-sm text-amber-100">
+                            {ownerGuardMessage}
+                        </div>
+                    ) : null}
 
                     <div className="flex items-center justify-between rounded-xl border border-primary/30 bg-primary/10 p-3">
                         <div>
@@ -558,10 +625,10 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
                                 size="sm"
                                 className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
                                 onClick={handleDecryptBalance}
-                                disabled={isDecrypting || isDecryptInProgress}
+                                disabled={isDecrypting || isDecryptInProgress || !isCurrentUserOwner}
                             >
                                 <IconEye size={16} />
-                                {isDecrypting || isDecryptInProgress ? 'Decrypting...' : 'Decrypt'}
+                                {!isCurrentUserOwner ? 'Owner only' : isDecrypting || isDecryptInProgress ? 'Decrypting...' : 'Decrypt'}
                             </Button>
                         </div>
                     </div>
@@ -581,10 +648,10 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
                             <Button
                                 className="gap-2 bg-emerald-500 text-black hover:bg-emerald-400"
                                 onClick={handleFundCard}
-                                disabled={isFunding}
+                                disabled={isFunding || !isCurrentUserOwner}
                             >
                                 <IconWallet size={16} />
-                                {isFunding ? 'Adding...' : 'Add funds'}
+                                {!isCurrentUserOwner ? 'Owner only' : isFunding ? 'Adding...' : 'Add funds'}
                             </Button>
                         </div>
                     </div>
@@ -594,9 +661,10 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
                             variant={showSendForm ? 'default' : 'secondary'}
                             className="mb-3 gap-2"
                             onClick={() => setShowSendForm(!showSendForm)}
+                            disabled={!isCurrentUserOwner}
                         >
                             <IconSend size={16} />
-                            {showSendForm ? 'Hide send form' : 'Send money'}
+                            {!isCurrentUserOwner ? 'Owner only' : showSendForm ? 'Hide send form' : 'Send money'}
                         </Button>
                     </div>
                 </CardContent>
@@ -634,7 +702,7 @@ export function CardOverview({ address, cardAddress }: { address: Hex | undefine
                         <Button
                             className="h-11 w-full bg-primary font-bold text-black hover:bg-primary/90"
                             onClick={handleSendConfidential}
-                            disabled={isSending || !sendTo || !sendAmount}
+                            disabled={isSending || !sendTo || !sendAmount || !isCurrentUserOwner}
                         >
                             {isSending ? (
                                 <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
