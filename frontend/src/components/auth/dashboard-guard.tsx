@@ -3,9 +3,25 @@
 import { useMe } from '@/providers/auth-provider';
 import SmartWalletOnboarding from '@/components/auth/smart-wallet-onboarding';
 import { Fingerprint } from 'lucide-react';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
-export default function DashboardGuard({ children }: { children: React.ReactNode }) {
+export default function DashboardGuard({
+    children,
+    requiredAccountType
+}: {
+    children: React.ReactNode;
+    requiredAccountType?: 'personal' | 'business';
+}) {
     const { me, isLoading, isMounted } = useMe();
+    const router = useRouter();
+
+    useEffect(() => {
+        if (!me || !requiredAccountType) return;
+        if (me.accountType !== requiredAccountType) {
+            router.replace(me.accountType === 'business' ? '/merchant' : '/dashboard/my-card');
+        }
+    }, [me, requiredAccountType, router]);
 
     // Prevent hydration mismatch
     if (!isMounted) {
@@ -48,6 +64,15 @@ export default function DashboardGuard({ children }: { children: React.ReactNode
                         Secured by device biometrics (WebAuthn)
                     </p>
                 </div>
+            </div>
+        );
+    }
+
+    if (requiredAccountType && me.accountType !== requiredAccountType) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[70vh] space-y-3">
+                <div className="h-8 w-8 animate-spin border-4 border-primary border-t-transparent rounded-full" />
+                <p className="text-sm text-muted-foreground">Redirecting to your authorized portal...</p>
             </div>
         );
     }

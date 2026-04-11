@@ -2,6 +2,7 @@
 
 import { useMe } from '@/providers/auth-provider';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
@@ -12,7 +13,7 @@ import {
     DialogTitle, 
     DialogTrigger 
 } from '@/components/ui/dialog';
-import { Loader2, Fingerprint, Wallet, Power } from 'lucide-react';
+import { Loader2, Fingerprint, Wallet, Power, Briefcase, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function SmartWalletOnboarding({ 
@@ -22,7 +23,9 @@ export default function SmartWalletOnboarding({
     variant?: 'default' | 'ghost' | 'outline' | 'secondary' | 'link',
     className?: string 
 }) {
+    const router = useRouter();
     const [username, setUsername] = useState('');
+    const [accountType, setAccountType] = useState<'personal' | 'business'>('personal');
     const { create, get, returning, isLoading, me, disconnect } = useMe();
     const [createForm, setCreateForm] = useState(!returning);
     const [isOpen, setIsOpen] = useState(false);
@@ -31,8 +34,16 @@ export default function SmartWalletOnboarding({
         e.preventDefault();
         if (username) {
             try {
-                await create(username);
+                const created = await create(username, accountType);
+                if (!created) {
+                    return;
+                }
                 setIsOpen(false);
+                if (created.accountType === 'business') {
+                    router.push('/merchant');
+                } else {
+                    router.push('/dashboard/my-card');
+                }
             } catch (err) {
                 console.error("Create failed", err);
             }
@@ -42,8 +53,16 @@ export default function SmartWalletOnboarding({
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await get();
+            const loggedIn = await get(accountType);
+            if (!loggedIn) {
+                return;
+            }
             setIsOpen(false);
+            if (loggedIn.accountType === 'business') {
+                router.push('/merchant');
+            } else {
+                router.push('/dashboard/my-card');
+            }
         } catch (err) {
             console.error("Login failed", err);
         }
@@ -83,7 +102,7 @@ export default function SmartWalletOnboarding({
                     </DialogTitle>
                     <DialogDescription className="text-center text-muted-foreground text-sm max-w-[280px]">
                         {createForm 
-                            ? 'Create a private card wallet using your device biometrics.' 
+                            ? 'Create a private wallet with your device biometrics.' 
                             : 'Log in securely using your passkey.'}
                     </DialogDescription>
                 </DialogHeader>
@@ -95,7 +114,47 @@ export default function SmartWalletOnboarding({
                             <p className="text-sm font-medium animate-pulse">Authenticating...</p>
                         </div>
                     ) : (
-                        <form className="w-full space-y-4" onSubmit={createForm ? handleCreate : handleLogin}>
+                        <form className="w-full space-y-5" onSubmit={createForm ? handleCreate : handleLogin}>
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setAccountType('personal')}
+                                        className={cn(
+                                            "flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all",
+                                            accountType === 'personal' ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
+                                        )}
+                                    >
+                                        <User className={cn("h-6 w-6 mb-2", accountType === 'personal' ? "text-primary" : "text-muted-foreground")} />
+                                        <span className={cn("text-sm font-medium", accountType === 'personal' ? "text-primary" : "text-muted-foreground")}>Personal</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAccountType('business')}
+                                        className={cn(
+                                            "flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all",
+                                            accountType === 'business' ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
+                                        )}
+                                    >
+                                        <Briefcase className={cn("h-6 w-6 mb-2", accountType === 'business' ? "text-primary" : "text-muted-foreground")} />
+                                        <span className={cn("text-sm font-medium", accountType === 'business' ? "text-primary" : "text-muted-foreground")}>Business / Merchant</span>
+                                    </button>
+                                </div>
+                                {!createForm ? (
+                                    <p className="text-xs text-muted-foreground text-center">
+                                        Login uses this only if on-chain role registration needs recovery.
+                                    </p>
+                                ) : null}
+                            </div>
+
+                            {createForm ? (
+                                <div className="space-y-3">
+                                    <p className="text-xs text-muted-foreground text-center">
+                                        This account type will be stored on-chain for this wallet.
+                                    </p>
+                                </div>
+                            ) : null}
+                            
                             {createForm && (
                                 <div className="space-y-2">
                                     <Input
@@ -116,11 +175,11 @@ export default function SmartWalletOnboarding({
                             >
                                 {createForm ? (
                                     <span className="flex items-center gap-2">
-                                        <Wallet className="h-5 w-5" /> CREATE WALLET
+                                        <Wallet className="h-5 w-5" /> Create Wallet
                                     </span>
                                 ) : (
                                     <span className="flex items-center gap-2">
-                                        <Fingerprint className="h-5 w-5" /> SIGN IN
+                                        <Fingerprint className="h-5 w-5" /> Sign In
                                     </span>
                                 )}
                             </Button>

@@ -7,10 +7,20 @@ export async function getUser(id: Hex): Promise<User> {
     method: "GET",
   });
 
-  const user = await response.json();
+  const raw = await response.text();
+  let user: any = null;
+  try {
+    user = raw ? JSON.parse(raw) : null;
+  } catch {
+    user = null;
+  }
 
-  if (response.status !== 200 || user.error) {
-    throw new Error(user.error || "Failed to fetch user");
+  if (!response.ok || (user && typeof user === "object" && user.error)) {
+    throw new Error((user && user.error) || `Failed to fetch user (HTTP ${response.status}).`);
+  }
+
+  if (!user || typeof user !== "object") {
+    throw new Error("Failed to fetch user: server returned an empty response.");
   }
 
   return {

@@ -21,7 +21,7 @@ import {
   SidebarRail
 } from '@/components/ui/sidebar';
 import { NavUser } from '@/components/nav-user';
-import { personalNavItems as navItems } from '@/config/nav-config';
+import { merchantNavItems as navItems } from '@/config/nav-config';
 import { useIsMounted } from '@/hooks/use-is-mounted';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import Link from 'next/link';
@@ -31,7 +31,7 @@ import { IconChevronRight } from '@tabler/icons-react';
 import { Icons } from '../icons';
 import Image from 'next/image';
 
-export default function AppSidebar() {
+export default function MerchantSidebar() {
   const pathname = usePathname();
   const { isOpen } = useMediaQuery();
   const mounted = useIsMounted();

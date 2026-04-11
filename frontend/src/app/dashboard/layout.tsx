@@ -28,7 +28,7 @@ export default async function DashboardLayout({
       <SidebarInset>
         <Header />
         {/* page main content */}
-        <DashboardGuard>{children}</DashboardGuard>
+        <DashboardGuard requiredAccountType='personal'>{children}</DashboardGuard>
         {/* page main content ends */}
       </SidebarInset>
     </SidebarProvider>

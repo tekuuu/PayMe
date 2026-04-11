@@ -1,38 +1,6 @@
 import { NavItem } from '@/types';
 
-/**
- * Navigation configuration with RBAC support
- *
- * This configuration is used for both the sidebar navigation and Cmd+K bar.
- *
- * RBAC Access Control:
- * Each navigation item can have an `access` property that controls visibility
- * based on permissions, plans, features, roles, and organization context.
- *
- * Examples:
- *
- * 1. Require organization:
- *    access: { requireOrg: true }
- *
- * 2. Require specific permission:
- *    access: { requireOrg: true, permission: 'org:teams:manage' }
- *
- * 3. Require specific plan:
- *    access: { plan: 'pro' }
- *
- * 4. Require specific feature:
- *    access: { feature: 'premium_access' }
- *
- * 5. Require specific role:
- *    access: { role: 'admin' }
- *
- * 6. Multiple conditions (all must be true):
- *    access: { requireOrg: true, permission: 'org:teams:manage', plan: 'pro' }
- *
- * Note: The `visible` function is deprecated but still supported for backward compatibility.
- * Use the `access` property for new items.
- */
-export const navItems: NavItem[] = [
+export const personalNavItems: NavItem[] = [
   {
     title: 'My Card',
     url: '/dashboard/my-card',
@@ -66,3 +34,80 @@ export const navItems: NavItem[] = [
     items: []
   }
 ];
+
+export const merchantNavItems: NavItem[] = [
+  {
+    title: 'Overview',
+    url: '/merchant',
+    icon: 'dashboard',
+    isActive: false,
+    shortcut: ['m', 'd'],
+    items: []
+  },
+  {
+    title: 'Plans',
+    url: '/merchant/plans',
+    icon: 'workspace',
+    isActive: false,
+    shortcut: ['m', 'p'],
+    items: []
+  },
+  {
+    title: 'Subscribers',
+    url: '/merchant/subscriptions',
+    icon: 'subscriptions',
+    isActive: false,
+    shortcut: ['m', 's'],
+    items: []
+  },
+  {
+    title: 'Billing',
+    url: '/merchant/billing-cycles',
+    icon: 'billing',
+    isActive: false,
+    shortcut: ['m', 'b'],
+    items: []
+  },
+  {
+    title: 'Recovery',
+    url: '/merchant/recovery',
+    icon: 'warning',
+    isActive: false,
+    shortcut: ['m', 'r'],
+    items: []
+  },
+  {
+    title: 'Customers',
+    url: '/merchant/customers',
+    icon: 'teams',
+    isActive: false,
+    shortcut: ['m', 'c'],
+    items: []
+  },
+  {
+    title: 'Payouts',
+    url: '/merchant/payouts',
+    icon: 'receive',
+    isActive: false,
+    shortcut: ['m', 'p'],
+    items: []
+  },
+  {
+    title: 'Contract Controls',
+    url: '/merchant/contracts',
+    icon: 'settings',
+    isActive: false,
+    shortcut: ['m', 'k'],
+    items: []
+  },
+  {
+    title: 'Integration',
+    url: '/merchant/integration',
+    icon: 'workspace',
+    isActive: false,
+    shortcut: ['m', 'i'],
+    items: []
+  }
+];
+
+export const navItems = personalNavItems; // fallback

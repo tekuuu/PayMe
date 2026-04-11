@@ -2,9 +2,9 @@
 
 import {
   IconCircleCheck,
-  IconBell,
   IconCopy,
   IconCreditCard,
+  IconLayoutDashboard,
   IconLogout,
   IconSparkles
 } from '@tabler/icons-react';
@@ -22,7 +22,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
   useSidebar
 } from '@/components/ui/sidebar';
@@ -30,7 +29,6 @@ import { useRouter } from 'next/navigation';
 import React, { useState } from 'react';
 import { useMe } from '@/providers/auth-provider';
 import { useTokenBalances } from '@/hooks/use-token-balances';
-import { Power } from 'lucide-react';
 
 export function NavUser({
   wallet
@@ -46,6 +44,7 @@ export function NavUser({
   const { me, disconnect } = useMe();
   const [copied, setCopied] = useState(false);
   const balances = useTokenBalances(me?.account);
+  const isBusiness = me?.accountType === 'business';
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -129,18 +128,37 @@ export function NavUser({
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => router.push('/dashboard/activity')}>
-                  <IconCircleCheck className='mr-3 h-4 w-4' />
-                  Activity
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push('/dashboard/my-card')}>
-                  <IconCreditCard className='mr-3 h-4 w-4' />
-                  My Card
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
-                  <IconSparkles className='mr-3 h-4 w-4' />
-                  Settings
-                </DropdownMenuItem>
+                {isBusiness ? (
+                  <>
+                    <DropdownMenuItem onClick={() => router.push('/merchant')}>
+                      <IconLayoutDashboard className='mr-3 h-4 w-4' />
+                      Overview
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push('/merchant/billing-cycles')}>
+                      <IconCircleCheck className='mr-3 h-4 w-4' />
+                      Billing Cycles
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push('/merchant/recovery')}>
+                      <IconSparkles className='mr-3 h-4 w-4' />
+                      Recovery
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <>
+                    <DropdownMenuItem onClick={() => router.push('/dashboard/activity')}>
+                      <IconCircleCheck className='mr-3 h-4 w-4' />
+                      Activity
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push('/dashboard/my-card')}>
+                      <IconCreditCard className='mr-3 h-4 w-4' />
+                      My Card
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
+                      <IconSparkles className='mr-3 h-4 w-4' />
+                      Settings
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuItem

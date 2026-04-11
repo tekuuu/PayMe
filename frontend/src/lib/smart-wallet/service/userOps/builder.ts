@@ -46,12 +46,16 @@ export class UserOpBuilder {
     maxPriorityFeePerGas,
     keyId,
     nonce,
+    sender,
+    publicKey,
   }: {
     calls: Call[];
     maxFeePerGas?: bigint;
     maxPriorityFeePerGas?: bigint;
     keyId: Hex;
     nonce?: bigint;
+    sender?: Hex;
+    publicKey?: [bigint, bigint];
   }): Promise<UserOperationAsHex> {
     smartWallet.init();
 
@@ -59,20 +63,35 @@ export class UserOpBuilder {
     let resolvedMaxPriorityFeePerGas = maxPriorityFeePerGas;
 
     if (!resolvedMaxFeePerGas || !resolvedMaxPriorityFeePerGas) {
+      // Prefer chain fee estimates. Pimlico's "fast" quotes can be much higher than needed,
+      // which increases the required prefund and can break fresh-account flows.
+      const fees = await this.publicClient.estimateFeesPerGas();
+      resolvedMaxFeePerGas = resolvedMaxFeePerGas ?? fees.maxFeePerGas ?? 0n;
+      resolvedMaxPriorityFeePerGas = resolvedMaxPriorityFeePerGas ?? fees.maxPriorityFeePerGas ?? 0n;
+
+      // Best-effort cap using bundler quotes (if available) to avoid underpricing,
+      // without letting an aggressive quote explode prefund requirements.
       try {
         const gasPrice = await smartWallet.client.request({
           method: "pimlico_getUserOperationGasPrice" as never,
         } as never);
-        resolvedMaxFeePerGas = BigInt((gasPrice as any).fast.maxFeePerGas);
-        resolvedMaxPriorityFeePerGas = BigInt((gasPrice as any).fast.maxPriorityFeePerGas);
+        const pimlicoMax = BigInt((gasPrice as any).fast.maxFeePerGas);
+        const pimlicoTip = BigInt((gasPrice as any).fast.maxPriorityFeePerGas);
+
+        // Cap at 2x the chain estimate (still plenty for sepolia volatility).
+        const capMax = resolvedMaxFeePerGas * 2n;
+        const capTip = resolvedMaxPriorityFeePerGas * 2n;
+        resolvedMaxFeePerGas = pimlicoMax < capMax ? pimlicoMax : capMax;
+        resolvedMaxPriorityFeePerGas = pimlicoTip < capTip ? pimlicoTip : capTip;
       } catch {
-        const fees = await this.publicClient.estimateFeesPerGas();
-        resolvedMaxFeePerGas = resolvedMaxFeePerGas ?? fees.maxFeePerGas ?? 0n;
-        resolvedMaxPriorityFeePerGas = resolvedMaxPriorityFeePerGas ?? fees.maxPriorityFeePerGas ?? 0n;
+        // ignore
       }
     }
 
-    const { account, publicKey } = await this._calculateSmartWalletAddressFromLocalStorage();
+    const { account, publicKey: resolvedPublicKey } = await this._resolveSmartWalletIdentity({
+      sender,
+      publicKey,
+    });
 
     const bytecode = await this.publicClient.getBytecode({
       address: account,
@@ -80,7 +99,7 @@ export class UserOpBuilder {
 
     let initCode = toHex(new Uint8Array(0));
     if (!bytecode || bytecode === "0x" || bytecode === "0x0") {
-      ({ initCode } = await this._createInitCode(publicKey));
+      ({ initCode } = await this._createInitCode(resolvedPublicKey));
     }
 
     const resolvedNonce = nonce ?? (await this._getNonce(account));
@@ -99,34 +118,81 @@ export class UserOpBuilder {
       verificationGasLimit: "0x0",
       preVerificationGas: "0x0",
     } as any;
-    
+
+    const withCeilMargin = (value: bigint, bps: bigint) => {
+      if (value <= 0n) return 0n;
+      // ceil(value * (1 + bps/10_000))
+      return (value * (10_000n + bps) + 9_999n) / 10_000n;
+    };
+
+    const maxBigInt = (values: bigint[]) => {
+      let best = values[0] ?? 0n;
+      for (const value of values) {
+        if (value > best) best = value;
+      }
+      return best;
+    };
+
     try {
-        const gasEstimate = await smartWallet.estimateUserOperationGas({ userOp: partialOp });
-        return {
+      // Estimating with empty signature underestimates preVerificationGas for WebAuthn payloads.
+      // Use a realistic dummy signature size so final signed UserOps don't get rejected.
+      const dummySignature = (`0x${"11".repeat(900)}`) as Hex;
+      const gasEstimate = await smartWallet.estimateUserOperationGas({
+        userOp: {
           ...partialOp,
-          callGasLimit: toHex(BigInt(gasEstimate.callGasLimit) + BigInt(2000000)),
-          verificationGasLimit: toHex(BigInt(gasEstimate.verificationGasLimit) + BigInt(2000000)),
-          preVerificationGas: toHex(BigInt(gasEstimate.preVerificationGas) + BigInt(20000)),
-        };
+          signature: dummySignature,
+        } as any,
+      });
+
+      const call = BigInt(gasEstimate.callGasLimit);
+      const verification = BigInt(gasEstimate.verificationGasLimit);
+      const pre = BigInt(gasEstimate.preVerificationGas);
+
+      // Keep margins moderate; too little fails, too much inflates prefund.
+      const callGasLimit = withCeilMargin(call, 2000n) + 50_000n; // +20% + 50k
+      const verificationGasLimit = withCeilMargin(verification, 2000n) + 100_000n; // +20% + 100k
+      const preVerificationGas = maxBigInt([
+        withCeilMargin(pre, 3000n) + 15_000n, // +30% + 15k
+        80_000n, // floor for passkey-heavy payloads
+      ]);
+
+      return {
+        ...partialOp,
+        callGasLimit: toHex(callGasLimit),
+        verificationGasLimit: toHex(verificationGasLimit),
+        preVerificationGas: toHex(preVerificationGas),
+      };
     } catch(e) {
-        console.warn("Gas estimation failed, falling back to generous defaults", e);
-        return {
-          ...partialOp,
-          callGasLimit: toHex(BigInt(5000000)),
-          verificationGasLimit: toHex(BigInt(3000000)),
-          preVerificationGas: toHex(BigInt(500000)),
-        }
+      console.warn("Gas estimation failed, falling back to defaults", e);
+
+      // Moderate defaults (avoid exploding prefund). If these still fail, we'll need a paymaster
+      // or a more explicit funding flow.
+      return {
+        ...partialOp,
+        callGasLimit: toHex(1_500_000n),
+        verificationGasLimit: toHex(1_500_000n),
+        preVerificationGas: toHex(350_000n),
+      };
     }
   }
 
   async getSenderAddress(keyId: Hex): Promise<Hex> {
-    const { account } = await this._calculateSmartWalletAddressFromLocalStorage();
+    const { account } = await this._resolveSmartWalletIdentity({});
     return account;
   }
 
-  private async _calculateSmartWalletAddressFromLocalStorage(): Promise<{ account: Hex; publicKey: [bigint, bigint] }> {
+  private async _resolveSmartWalletIdentity(input: {
+    sender?: Hex;
+    publicKey?: [bigint, bigint];
+  }): Promise<{ account: Hex; publicKey: [bigint, bigint] }> {
+    if (input.sender && input.publicKey) {
+      return { account: input.sender, publicKey: input.publicKey };
+    }
+
     const meStr = localStorage.getItem("passkeys4337.me");
-    if (!meStr) throw new Error("User session not found in localStorage");
+    if (!meStr) {
+      throw new Error("User session not found in localStorage");
+    }
     
     const me = JSON.parse(meStr);
     const publicKey: [bigint, bigint] = [BigInt(me.pubKey.x), BigInt(me.pubKey.y)];
