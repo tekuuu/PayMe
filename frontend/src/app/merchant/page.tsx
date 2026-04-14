@@ -6,7 +6,11 @@ import { useMe } from '@/providers/auth-provider';
 import { useMerchantControlPlane } from '@/hooks/use-merchant-control-plane';
 import { formatMicrosToCurrency } from '@/lib/merchant/control-plane-store';
 import { useConfidentialTokenBalance } from '@/hooks/use-confidential-token-balance';
+import { useTokenBalances } from '@/hooks/use-token-balances';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { SendTokenCard } from '@/components/smart-wallet/send-token-card';
+import { ReceiveTokenCard } from '@/components/smart-wallet/receive-token-card';
 import type { Hex } from 'viem';
 
 function metricCard(title: string, value: string, helper: string, tone?: 'default' | 'danger' | 'warning') {
@@ -26,21 +30,44 @@ function metricCard(title: string, value: string, helper: string, tone?: 'defaul
   );
 }
 
+function trimAmount(value: string, maxFractionDigits = 4) {
+  if (!value) return '0';
+  const [whole, fraction = ''] = value.split('.');
+  if (!fraction) return whole;
+  const trimmed = fraction.slice(0, maxFractionDigits).replace(/0+$/, '');
+  return trimmed ? `${whole}.${trimmed}` : whole;
+}
+
 export default function MerchantPage() {
   const { me } = useMe();
   const { metrics, recoveryQueue, state } = useMerchantControlPlane(me?.account);
+  const balances = useTokenBalances(me?.account);
   const {
     decryptedValue,
-    decrypt,
+    decryptWithAclSync,
     canDecrypt,
     isDecrypting,
     handleHex,
     decryptError,
     serverSignerError,
+    usingServerSigner,
   } = useConfidentialTokenBalance(me?.account as Hex | undefined);
 
   const mrrText = metrics ? formatMicrosToCurrency(metrics.mrrProxyMicros) : '0';
+  const plainUsdcRaw = (balances.usdc.balance as bigint | undefined) ?? 0n;
+  const decryptedCusdcRaw = decryptedValue ?? 0n;
+  const stableVisibleRaw = plainUsdcRaw + decryptedCusdcRaw;
+  const stableVisibleText = formatMicrosToCurrency(stableVisibleRaw);
+  const plainUsdcText = formatMicrosToCurrency(plainUsdcRaw);
   const decryptedText = decryptedValue !== undefined ? formatMicrosToCurrency(decryptedValue) : null;
+  const totalBalanceHelper =
+    decryptedValue !== undefined
+      ? 'Includes plain USDC + decrypted confidential cUSDC.'
+      : 'cUSDC is still encrypted. Decrypt to include it in the total.';
+  const walletEthText = trimAmount(balances.eth.walletFormatted || '0');
+  const depositEthText = trimAmount(balances.eth.depositFormatted || '0');
+  const totalEthText = trimAmount(balances.eth.formatted || '0');
+  const wethText = trimAmount(balances.weth.formatted || '0');
 
   return (
     <div className='flex-1 space-y-6 p-8 pt-6'>
@@ -66,35 +93,124 @@ export default function MerchantPage() {
         </div>
       </div>
 
-      <div className='rounded-xl border bg-card p-6 shadow-sm'>
-        <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+      <div className='rounded-2xl border bg-card p-6 shadow-sm'>
+        <div className='flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between'>
           <div>
-            <h3 className='font-semibold'>Merchant cUSDC Balance</h3>
-            <p className='text-sm text-muted-foreground'>Encrypted on-chain. Decrypt to view the amount.</p>
+            <p className='text-xs uppercase tracking-wide text-muted-foreground'>Treasury Snapshot</p>
+            <h3 className='mt-1 text-2xl font-semibold tracking-tight'>Total Visible Wallet Balance</h3>
+            <p className='mt-3 text-3xl font-bold'>{stableVisibleText} USDC</p>
+            <p className='mt-1 text-sm text-muted-foreground'>{totalBalanceHelper}</p>
           </div>
-          <Button
-            variant='outline'
-            className='gap-2'
-            onClick={() => decrypt()}
-            disabled={!canDecrypt || isDecrypting || !handleHex}
-          >
-            {isDecrypting ? <Loader2 className='h-4 w-4 animate-spin' /> : <Eye className='h-4 w-4' />}
-            Decrypt
-          </Button>
+
+          <div className='flex flex-wrap items-center gap-2'>
+            <Button
+              variant='outline'
+              className='gap-2'
+              onClick={() => decryptWithAclSync()}
+              disabled={!canDecrypt || isDecrypting || !handleHex}
+            >
+              {isDecrypting ? <Loader2 className='h-4 w-4 animate-spin' /> : <Eye className='h-4 w-4' />}
+              Decrypt cUSDC
+            </Button>
+          </div>
         </div>
 
-        <div className='mt-4 grid gap-4 md:grid-cols-2'>
-          <div className='rounded-lg border bg-background p-4'>
-            <p className='text-xs uppercase tracking-wide text-muted-foreground'>Encrypted Handle</p>
-            <p className='mt-2 font-mono text-xs break-all text-muted-foreground'>{handleHex || 'No handle yet'}</p>
+        {usingServerSigner && handleHex ? (
+          <div className='mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700'>
+            Decrypt performs ACL sync so the relayer signer can read the latest encrypted cUSDC handle.
           </div>
+        ) : null}
+
+        <div className='mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
           <div className='rounded-lg border bg-background p-4'>
-            <p className='text-xs uppercase tracking-wide text-muted-foreground'>Decrypted Balance</p>
-            <p className='mt-2 text-2xl font-semibold'>{decryptedText ? `${decryptedText} cUSDC` : '-'}</p>
+            <p className='text-xs uppercase tracking-wide text-muted-foreground'>Plain USDC</p>
+            <p className='mt-2 text-2xl font-semibold'>{plainUsdcText} USDC</p>
+            <p className='mt-1 text-xs text-muted-foreground'>Public ERC20 balance.</p>
+          </div>
+
+          <div className='rounded-lg border bg-background p-4'>
+            <p className='text-xs uppercase tracking-wide text-muted-foreground'>Confidential cUSDC</p>
+            <p className='mt-2 text-2xl font-semibold'>{decryptedText ? `${decryptedText} cUSDC` : 'Encrypted'}</p>
+            <p className='mt-1 text-xs text-muted-foreground'>Decrypt to reveal private balance.</p>
+          </div>
+
+          <div className='rounded-lg border bg-background p-4'>
+            <p className='text-xs uppercase tracking-wide text-muted-foreground'>Spendable ETH</p>
+            <p className='mt-2 text-2xl font-semibold'>{totalEthText} ETH</p>
+            <p className='mt-1 text-xs text-muted-foreground'>Wallet ETH + EntryPoint deposit.</p>
+          </div>
+
+          <div className='rounded-lg border bg-background p-4'>
+            <p className='text-xs uppercase tracking-wide text-muted-foreground'>WETH</p>
+            <p className='mt-2 text-2xl font-semibold'>{wethText} WETH</p>
+            <p className='mt-1 text-xs text-muted-foreground'>Wrapped Ether in smart wallet.</p>
+          </div>
+        </div>
+
+        <div className='mt-5 grid gap-4 lg:grid-cols-[1.2fr_1fr]'>
+          <div className='rounded-lg border bg-background p-4'>
+            <p className='text-xs uppercase tracking-wide text-muted-foreground'>All Wallet Assets</p>
+            <div className='mt-3 space-y-3'>
+              <div className='flex items-center justify-between text-sm'>
+                <span className='text-muted-foreground'>ETH (wallet)</span>
+                <span className='font-medium'>{walletEthText} ETH</span>
+              </div>
+              <div className='flex items-center justify-between text-sm'>
+                <span className='text-muted-foreground'>ETH (EntryPoint deposit)</span>
+                <span className='font-medium'>{depositEthText} ETH</span>
+              </div>
+              <div className='flex items-center justify-between text-sm'>
+                <span className='text-muted-foreground'>USDC (plain)</span>
+                <span className='font-medium'>{plainUsdcText} USDC</span>
+              </div>
+              <div className='flex items-center justify-between text-sm'>
+                <span className='text-muted-foreground'>WETH</span>
+                <span className='font-medium'>{wethText} WETH</span>
+              </div>
+              <div className='flex items-center justify-between text-sm'>
+                <span className='text-muted-foreground'>cUSDC (decrypted)</span>
+                <span className='font-medium'>{decryptedText ? `${decryptedText} cUSDC` : 'Encrypted'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className='rounded-lg border bg-background p-4'>
+            <p className='text-xs uppercase tracking-wide text-muted-foreground'>Confidential Handle Status</p>
+            <p className='mt-2 font-mono text-xs break-all text-muted-foreground'>{handleHex || 'No encrypted handle yet'}</p>
             {(decryptError || serverSignerError) ? (
-              <p className='mt-2 text-xs text-rose-600'>{decryptError || serverSignerError}</p>
-            ) : null}
+              <p className='mt-3 text-xs text-rose-600'>{decryptError || serverSignerError}</p>
+            ) : (
+              <p className='mt-3 text-xs text-muted-foreground'>
+                The encrypted handle updates after confidential balance changes. Decrypt again to refresh visible cUSDC.
+              </p>
+            )}
           </div>
+        </div>
+
+        <div className='mt-6 rounded-xl border bg-background/40 p-4'>
+          <div className='mb-3'>
+            <p className='text-xs uppercase tracking-wide text-muted-foreground'>Wallet Actions</p>
+            <p className='mt-1 text-sm text-muted-foreground'>Send and receive directly from your merchant wallet on this page.</p>
+          </div>
+
+          {me ? (
+            <Tabs defaultValue='send' className='space-y-4'>
+              <TabsList className='grid h-11 w-full grid-cols-2 rounded-lg bg-muted/50'>
+                <TabsTrigger value='send'>Send</TabsTrigger>
+                <TabsTrigger value='receive'>Receive</TabsTrigger>
+              </TabsList>
+              <TabsContent value='send' className='mt-0'>
+                <SendTokenCard me={me} />
+              </TabsContent>
+              <TabsContent value='receive' className='mt-0'>
+                <ReceiveTokenCard address={me.account as Hex | undefined} />
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <p className='rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground'>
+              Connect your merchant wallet to enable send and receive actions.
+            </p>
+          )}
         </div>
       </div>
 

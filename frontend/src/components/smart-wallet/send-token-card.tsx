@@ -1,10 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CHAIN } from '@/config/constants';
+import { CHAIN, ENTRYPOINT_ADDRESS } from '@/config/constants';
 import { useTokenBalances } from '@/hooks/use-token-balances';
 import { smartWallet } from '@/lib/smart-wallet';
 import { emptyHex, UserOpBuilder } from '@/lib/smart-wallet/service/userOps';
+import { ensureUserOpPrefund } from '@/lib/smart-wallet/service/userOps/prefund';
+import { UserOperationAsHex } from '@/lib/smart-wallet/service/userOps/types';
 import { Me } from '@/providers/auth-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +21,7 @@ import {
 } from '@/components/ui/select';
 import { AlertCircle, Send, CheckCircle2 } from 'lucide-react';
 import { IconCoins, IconWallet, IconHistory } from '@tabler/icons-react';
-import { encodeFunctionData, Hex, isAddress, parseEther, parseUnits, zeroAddress } from 'viem';
+import { encodeFunctionData, Hex, isAddress, parseEther, parseUnits, toHex, zeroAddress } from 'viem';
 import { toast } from 'sonner';
 
 type RecentRecipient = {
@@ -63,6 +65,19 @@ const ERC20_ABI = [
   }
 ] as const;
 
+const ENTRYPOINT_WITHDRAW_ABI = [
+  {
+    name: 'withdrawTo',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'withdrawAddress', type: 'address' },
+      { name: 'withdrawAmount', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+] as const;
+
 function formatBalanceDisplay(raw: bigint | undefined, decimals: number): string {
   if (!raw || raw <= 0n) return '0';
   const base = 10n ** BigInt(decimals);
@@ -71,6 +86,39 @@ function formatBalanceDisplay(raw: bigint | undefined, decimals: number): string
   if (fraction === 0n) return whole.toString();
   const fractionStr = fraction.toString().padStart(decimals, '0').slice(0, 4).replace(/0+$/, '');
   return fractionStr ? `${whole.toString()}.${fractionStr}` : whole.toString();
+}
+
+function minBigInt(values: bigint[]) {
+  let best = values[0] ?? 0n;
+  for (const value of values) {
+    if (value < best) best = value;
+  }
+  return best;
+}
+
+function tuneTransferUserOpGas(userOp: UserOperationAsHex): UserOperationAsHex {
+  const call = BigInt(userOp.callGasLimit);
+  const verification = BigInt(userOp.verificationGasLimit);
+  const pre = BigInt(userOp.preVerificationGas);
+
+  // Simple transfer flows do not need the heavy FHE/subscription gas profile.
+  return {
+    ...userOp,
+    callGasLimit: toHex(minBigInt([call, 240_000n])),
+    verificationGasLimit: toHex(minBigInt([verification, 700_000n])),
+    preVerificationGas: toHex(minBigInt([pre, 120_000n])),
+  };
+}
+
+function isGasTooTightError(error: unknown): boolean {
+  const message = String((error as any)?.message || '').toLowerCase();
+  return (
+    message.includes('aa40') ||
+    message.includes('aa23') ||
+    message.includes('over verificationgaslimit') ||
+    message.includes('preverificationgas is not enough') ||
+    message.includes('reverted (or oog)')
+  );
 }
 
 export function SendTokenCard({ me }: { me: Me }) {
@@ -110,15 +158,19 @@ export function SendTokenCard({ me }: { me: Me }) {
 
   const selectedToken = TOKENS.find((token) => token.symbol === tokenSymbol) || TOKENS[0];
 
+  const walletEthBalanceRaw = balances.eth.walletBalance as bigint | undefined;
+  const entryPointDepositRaw = balances.eth.depositBalance as bigint | undefined;
+  const totalEthBalanceRaw = balances.eth.balance as bigint | undefined;
+
   const selectedBalanceRaw =
     tokenSymbol === 'ETH'
-      ? (balances.eth.balance as bigint | undefined)
+      ? ((walletEthBalanceRaw ?? 0n) + (entryPointDepositRaw ?? 0n))
       : tokenSymbol === 'USDC'
         ? (balances.usdc.balance as bigint | undefined)
         : (balances.weth.balance as bigint | undefined);
 
   const selectedBalanceLabel = formatBalanceDisplay(selectedBalanceRaw, selectedToken.decimals);
-  const ethBalanceRaw = balances.eth.balance as bigint | undefined;
+  const ethBalanceRaw = walletEthBalanceRaw;
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -143,7 +195,13 @@ export function SendTokenCard({ me }: { me: Me }) {
       return;
     }
 
-    if (!selectedBalanceRaw || amountRaw > selectedBalanceRaw) {
+    if (selectedToken.symbol === 'ETH') {
+      const spendableEth = (walletEthBalanceRaw ?? 0n) + (entryPointDepositRaw ?? 0n);
+      if (amountRaw > spendableEth) {
+        setError('Insufficient ETH balance (wallet + AA deposit).');
+        return;
+      }
+    } else if (!selectedBalanceRaw || amountRaw > selectedBalanceRaw) {
       setError(`Insufficient ${selectedToken.symbol} balance.`);
       return;
     }
@@ -166,7 +224,7 @@ export function SendTokenCard({ me }: { me: Me }) {
         maxPriorityFeePerGas = fees.maxPriorityFeePerGas || 0n;
       }
 
-      const call =
+      const transferCall =
         selectedToken.address === null
           ? {
             dest: recipient as Hex,
@@ -183,23 +241,75 @@ export function SendTokenCard({ me }: { me: Me }) {
             })
           };
 
-      const userOp = await builder.buildUserOp({
-        calls: [call],
+      const calls: Array<{ dest: Hex; value: bigint; data: Hex }> = [transferCall];
+
+      if (selectedToken.address === null) {
+        const walletEth = walletEthBalanceRaw ?? 0n;
+        const aaDeposit = entryPointDepositRaw ?? 0n;
+        if (walletEth < amountRaw && aaDeposit > 0n) {
+          const neededFromDeposit = amountRaw - walletEth;
+          const withdrawCall = {
+            dest: ENTRYPOINT_ADDRESS,
+            value: 0n,
+            data: encodeFunctionData({
+              abi: ENTRYPOINT_WITHDRAW_ABI,
+              functionName: 'withdrawTo',
+              args: [me.account as Hex, neededFromDeposit],
+            }),
+          };
+          calls.unshift(withdrawCall);
+        }
+      }
+
+      const baseUserOp = await builder.buildUserOp({
+        calls,
         maxFeePerGas,
         maxPriorityFeePerGas,
         keyId: me.keyId
       });
 
-      const hash = await smartWallet.sendUserOperation({ userOp });
-      const receipt = await smartWallet.waitForUserOperationReceipt({ hash });
+      const reducedUserOp = tuneTransferUserOpGas(baseUserOp);
+      const hasReducedGas =
+        reducedUserOp.callGasLimit !== baseUserOp.callGasLimit ||
+        reducedUserOp.verificationGasLimit !== baseUserOp.verificationGasLimit ||
+        reducedUserOp.preVerificationGas !== baseUserOp.preVerificationGas;
 
-      if (!receipt || receipt.success === false || receipt.receipt?.status !== '0x1') {
-        throw new Error('Transaction reverted during execution. No on-chain transfer was finalized.');
+      const candidateUserOps = hasReducedGas ? [reducedUserOp, baseUserOp] : [baseUserOp];
+
+      let txHash: string | undefined;
+      let lastError: unknown = null;
+
+      for (let idx = 0; idx < candidateUserOps.length; idx++) {
+        const candidate = candidateUserOps[idx];
+        try {
+          await ensureUserOpPrefund({
+            account: me.account as Hex,
+            userOp: candidate,
+          });
+
+          const hash = await smartWallet.sendUserOperation({ userOp: candidate });
+          const receipt = await smartWallet.waitForUserOperationReceipt({ hash });
+
+          if (!receipt || receipt.success === false || receipt.receipt?.status !== '0x1') {
+            throw new Error('Transaction reverted during execution. No on-chain transfer was finalized.');
+          }
+
+          txHash = receipt.receipt?.transactionHash as string | undefined;
+          if (!txHash) {
+            throw new Error('Transaction confirmed but transaction hash is missing in receipt.');
+          }
+
+          break;
+        } catch (candidateError) {
+          lastError = candidateError;
+          if (idx === 0 && candidateUserOps.length > 1 && isGasTooTightError(candidateError)) {
+            continue;
+          }
+        }
       }
 
-      const txHash = receipt.receipt?.transactionHash as string | undefined;
       if (!txHash) {
-        throw new Error('Transaction confirmed but transaction hash is missing in receipt.');
+        throw (lastError as Error) || new Error('Failed to send transaction.');
       }
 
       setSuccessTxHash(txHash);
@@ -267,8 +377,13 @@ export function SendTokenCard({ me }: { me: Me }) {
             </div>
             <div className='flex items-center justify-between mt-1'>
                <p className='text-[10px] text-muted-foreground opacity-80 flex items-center gap-1'><IconWallet size={12}/> Available: {selectedBalanceLabel} {selectedToken.symbol}</p>
-               <p className='text-[10px] text-muted-foreground opacity-80 flex items-center gap-1'><IconCoins size={12}/> Gas: {formatBalanceDisplay(ethBalanceRaw, 18)} ETH</p>
+                 <p className='text-[10px] text-muted-foreground opacity-80 flex items-center gap-1'><IconCoins size={12}/> Wallet gas: {formatBalanceDisplay(ethBalanceRaw, 18)} ETH</p>
             </div>
+              {tokenSymbol === 'ETH' && totalEthBalanceRaw && totalEthBalanceRaw > (walletEthBalanceRaw ?? 0n) && (
+                <p className='text-[10px] text-muted-foreground opacity-80 mt-1'>
+                  Note: AA deposit is reserved for account abstraction and cannot be sent as plain ETH.
+                </p>
+              )}
           </div>
 
           <div className='space-y-1.5'>

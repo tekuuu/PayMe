@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Copy, Plus, Settings2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { parseUnits } from 'viem';
+import { Hex, parseUnits } from 'viem';
 import { useMe } from '@/providers/auth-provider';
 import { useMerchantControlPlane } from '@/hooks/use-merchant-control-plane';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { formatMicrosToCurrency, archivePlanTemplate, createPlanTemplate, updatePlanTemplate } from '@/lib/merchant/control-plane-store';
 import type { MerchantPlan, PlanInterval } from '@/lib/merchant/types';
+import {
+  archivePlanOnChain,
+  createPlanOnChain,
+  createPlanRef,
+  createPlanTermsHash,
+  updatePlanOnChain,
+} from '@/lib/subscriptions/plan-registry';
 
 function toAbsoluteAppOrigin() {
   if (typeof window === 'undefined') return 'http://localhost:3000';
@@ -44,6 +51,8 @@ export default function MerchantPlansPage() {
   const [editDescription, setEditDescription] = useState('');
   const [editInterval, setEditInterval] = useState<PlanInterval>('monthly');
   const [editAmount, setEditAmount] = useState('');
+  const [submittingAction, setSubmittingAction] = useState<'create' | 'edit' | 'archive' | null>(null);
+  const [activePlanId, setActivePlanId] = useState<string | null>(null);
 
   const copy = async (value: string, label: string) => {
     try {
@@ -54,7 +63,7 @@ export default function MerchantPlansPage() {
     }
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!me?.account) {
       toast.error('Please sign in with merchant wallet');
       return;
@@ -69,19 +78,49 @@ export default function MerchantPlansPage() {
     }
 
     try {
+      setSubmittingAction('create');
       const amountMicros = parseUnits(String(amount), 6).toString();
+      const billingIntervalSeconds = intervalToSeconds(interval);
+      const planRef = createPlanRef({
+        merchantAddress: me.account,
+        name,
+        amountRefMicros: amountMicros,
+        intervalSeconds: billingIntervalSeconds,
+      });
+      const termsHash = createPlanTermsHash({
+        name,
+        description,
+        interval,
+        billingIntervalSeconds,
+        amountRefMicros: amountMicros,
+      });
+
+      await createPlanOnChain({
+        identity: {
+          account: me.account,
+          keyId: me.keyId,
+        },
+        planRef,
+        periodSeconds: billingIntervalSeconds,
+        priceMicros: amountMicros,
+        termsHash,
+      });
+
       createPlanTemplate({
         merchantAddress: me.account,
         name,
         description,
         interval,
-        billingIntervalSeconds: intervalToSeconds(interval),
+        billingIntervalSeconds,
         amountRefMicros: amountMicros,
+        planRef,
       });
       setCreateOpen(false);
-      toast.success('Plan created');
+      toast.success('Plan created on-chain');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to create plan');
+    } finally {
+      setSubmittingAction(null);
     }
   };
 
@@ -97,7 +136,7 @@ export default function MerchantPlansPage() {
     }
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!me?.account || !editing) return;
     if (!editName.trim()) {
       toast.error('Plan name is required');
@@ -109,25 +148,76 @@ export default function MerchantPlansPage() {
     }
 
     try {
+      if (!editing.planRef || !/^0x[0-9a-fA-F]{64}$/.test(editing.planRef)) {
+        throw new Error('Plan is missing on-chain reference. Recreate this plan.');
+      }
+      setSubmittingAction('edit');
+      setActivePlanId(editing.id);
+
       const amountMicros = parseUnits(String(editAmount), 6).toString();
+      const billingIntervalSeconds = intervalToSeconds(editInterval);
+      const termsHash = createPlanTermsHash({
+        name: editName,
+        description: editDescription,
+        interval: editInterval,
+        billingIntervalSeconds,
+        amountRefMicros: amountMicros,
+      });
+
+      await updatePlanOnChain({
+        identity: {
+          account: me.account,
+          keyId: me.keyId,
+        },
+        planRef: editing.planRef as Hex,
+        periodSeconds: billingIntervalSeconds,
+        priceMicros: amountMicros,
+        termsHash,
+        active: editing.status !== 'archived',
+      });
+
       updatePlanTemplate(me.account, editing.id, {
         name: editName,
         description: editDescription,
         interval: editInterval,
-        billingIntervalSeconds: intervalToSeconds(editInterval),
+        billingIntervalSeconds,
         amountRefMicros: amountMicros,
       });
       setEditing(null);
-      toast.success('Plan updated');
+      toast.success('Plan updated on-chain');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to update plan');
+    } finally {
+      setSubmittingAction(null);
+      setActivePlanId(null);
     }
   };
 
-  const handleArchive = (planId: string) => {
+  const handleArchive = async (plan: MerchantPlan) => {
     if (!me?.account) return;
-    archivePlanTemplate(me.account, planId);
-    toast.success('Plan archived');
+    try {
+      if (!plan.planRef || !/^0x[0-9a-fA-F]{64}$/.test(plan.planRef)) {
+        throw new Error('Plan is missing on-chain reference. Recreate this plan.');
+      }
+      setSubmittingAction('archive');
+      setActivePlanId(plan.id);
+
+      await archivePlanOnChain({
+        identity: {
+          account: me.account,
+          keyId: me.keyId,
+        },
+        planRef: plan.planRef as Hex,
+      });
+
+      archivePlanTemplate(me.account, plan.id);
+      toast.success('Plan archived on-chain');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to archive plan');
+    } finally {
+      setSubmittingAction(null);
+      setActivePlanId(null);
+    }
   };
 
   return (
@@ -136,7 +226,7 @@ export default function MerchantPlansPage() {
         <div className='space-y-2'>
           <h2 className='text-3xl font-bold tracking-tight'>Plans</h2>
           <p className='text-sm text-muted-foreground'>
-            Create monthly or yearly plan templates and share a checkout link. No database yet: links embed plan details.
+            Create monthly or yearly plans on-chain and share a checkout link. Local storage still keeps display metadata until DB indexing lands.
           </p>
         </div>
 
@@ -193,7 +283,9 @@ export default function MerchantPlansPage() {
                 <Button variant='outline' onClick={() => setCreateOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleCreate}>Create</Button>
+                <Button onClick={handleCreate} disabled={submittingAction === 'create'}>
+                  {submittingAction === 'create' ? 'Creating...' : 'Create'}
+                </Button>
               </div>
             </div>
           </DialogContent>
@@ -271,9 +363,15 @@ export default function MerchantPlansPage() {
                             <Settings2 className='h-3.5 w-3.5' />
                             Edit
                           </Button>
-                          <Button size='sm' variant='destructive' className='gap-2' onClick={() => handleArchive(plan.id)} disabled={plan.status === 'archived'}>
+                          <Button
+                            size='sm'
+                            variant='destructive'
+                            className='gap-2'
+                            onClick={() => handleArchive(plan)}
+                            disabled={plan.status === 'archived' || submittingAction === 'archive'}
+                          >
                             <Trash2 className='h-3.5 w-3.5' />
-                            Archive
+                            {submittingAction === 'archive' && activePlanId === plan.id ? 'Archiving...' : 'Archive'}
                           </Button>
                         </div>
                       </td>
@@ -332,7 +430,9 @@ export default function MerchantPlansPage() {
               <Button variant='outline' onClick={() => setEditing(null)}>
                 Cancel
               </Button>
-              <Button onClick={handleSaveEdit}>Save</Button>
+              <Button onClick={handleSaveEdit} disabled={submittingAction === 'edit'}>
+                {submittingAction === 'edit' && activePlanId === editing?.id ? 'Saving...' : 'Save'}
+              </Button>
             </div>
           </div>
         </DialogContent>

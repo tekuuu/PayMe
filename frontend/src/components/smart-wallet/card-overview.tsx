@@ -44,6 +44,53 @@ function shortenAddress(address: string) {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
+function maxBigInt(values: bigint[]) {
+    let best = values[0] ?? 0n;
+    for (const value of values) {
+        if (value > best) best = value;
+    }
+    return best;
+}
+
+function withGasFloors(
+    userOp: any,
+    floors: { callGasLimit: bigint; verificationGasLimit: bigint; preVerificationGas: bigint }
+) {
+    return {
+        ...userOp,
+        callGasLimit: toHex(maxBigInt([BigInt(userOp.callGasLimit), floors.callGasLimit])),
+        verificationGasLimit: toHex(maxBigInt([BigInt(userOp.verificationGasLimit), floors.verificationGasLimit])),
+        preVerificationGas: toHex(maxBigInt([BigInt(userOp.preVerificationGas), floors.preVerificationGas])),
+    };
+}
+
+function bumpGas(userOp: any) {
+    const bump = (value: bigint, bps: bigint, extra: bigint) =>
+        ((value * (10_000n + bps) + 9_999n) / 10_000n) + extra;
+
+    const call = BigInt(userOp.callGasLimit);
+    const verification = BigInt(userOp.verificationGasLimit);
+    const pre = BigInt(userOp.preVerificationGas);
+
+    return {
+        ...userOp,
+        callGasLimit: toHex(maxBigInt([bump(call, 3500n, 50_000n), 650_000n])),
+        verificationGasLimit: toHex(maxBigInt([bump(verification, 7000n, 200_000n), 1_600_000n])),
+        preVerificationGas: toHex(maxBigInt([bump(pre, 4000n, 20_000n), 220_000n])),
+    };
+}
+
+function isRetryableGasSimulationError(error: unknown) {
+    const message = String((error as any)?.message || '').toLowerCase();
+    return (
+        message.includes('aa40') ||
+        message.includes('over verificationgaslimit') ||
+        message.includes('aa23') ||
+        message.includes('reverted (or oog)') ||
+        message.includes('out of gas')
+    );
+}
+
 export function CardOverview({ cardAddress }: { cardAddress: Hex | undefined }) {
     const { me } = useMe();
 
@@ -435,9 +482,19 @@ export function CardOverview({ cardAddress }: { cardAddress: Hex | undefined }) 
                 })
             };
 
-            const approveUserOp = await builder.buildUserOp({
+            let approveUserOp = await builder.buildUserOp({
                 calls: [approveCall],
                 keyId: me.keyId
+            });
+            approveUserOp = withGasFloors(approveUserOp, {
+                callGasLimit: 240_000n,
+                verificationGasLimit: 700_000n,
+                preVerificationGas: 120_000n,
+            });
+
+            await ensureUserOpPrefund({
+                account: me.account as Hex,
+                userOp: approveUserOp,
             });
 
             toast.info('Approving wrapper...');
@@ -497,15 +554,39 @@ export function CardOverview({ cardAddress }: { cardAddress: Hex | undefined }) 
                 })
             };
 
-            const wrapUserOp = await builder.buildUserOp({
+            let wrapUserOp = await builder.buildUserOp({
                 calls: [wrapCall],
                 keyId: me.keyId,
                 // Force next nonce to avoid transient RPC lag after the approve op is included.
                 nonce: BigInt(approveUserOp.nonce) + 1n
             });
+            wrapUserOp = withGasFloors(wrapUserOp, {
+                callGasLimit: 520_000n,
+                verificationGasLimit: 1_300_000n,
+                preVerificationGas: 180_000n,
+            });
+
+            await ensureUserOpPrefund({
+                account: me.account as Hex,
+                userOp: wrapUserOp,
+            });
 
             toast.info('Wrapping into confidential balance...');
-            const wrapHash = await smartWallet.sendUserOperation({ userOp: wrapUserOp });
+            let wrapHash: string;
+            try {
+                wrapHash = await smartWallet.sendUserOperation({ userOp: wrapUserOp });
+            } catch (error) {
+                if (!isRetryableGasSimulationError(error)) {
+                    throw error;
+                }
+
+                const bumpedWrapUserOp = bumpGas(wrapUserOp);
+                await ensureUserOpPrefund({
+                    account: me.account as Hex,
+                    userOp: bumpedWrapUserOp,
+                });
+                wrapHash = await smartWallet.sendUserOperation({ userOp: bumpedWrapUserOp });
+            }
             const wrapReceipt = await smartWallet.waitForUserOperationReceipt({ hash: wrapHash });
             if (!wrapReceipt || wrapReceipt.success === false || wrapReceipt.receipt?.status !== '0x1') {
                 const reason = wrapReceipt?.receipt?.revertReason || 'unknown';
@@ -523,10 +604,20 @@ export function CardOverview({ cardAddress }: { cardAddress: Hex | undefined }) 
                 })
             };
 
-            const aclSyncUserOp = await builder.buildUserOp({
+            let aclSyncUserOp = await builder.buildUserOp({
                 calls: [aclSyncCall],
                 keyId: me.keyId,
                 nonce: BigInt(wrapUserOp.nonce) + 1n
+            });
+            aclSyncUserOp = withGasFloors(aclSyncUserOp, {
+                callGasLimit: 260_000n,
+                verificationGasLimit: 700_000n,
+                preVerificationGas: 120_000n,
+            });
+
+            await ensureUserOpPrefund({
+                account: me.account as Hex,
+                userOp: aclSyncUserOp,
             });
 
             toast.info('Syncing balance ACL...');

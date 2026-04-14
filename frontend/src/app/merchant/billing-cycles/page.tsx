@@ -82,7 +82,7 @@ export default function MerchantBillingCyclesPage() {
   const dueAgreements = useMemo(() => {
     const now = Date.now();
     return availableSubscriptions
-      .filter((subscription) => subscription.status !== 'paused')
+      .filter((subscription) => subscription.status !== 'paused' && !subscription.cancelAtPeriodEnd)
       .map((subscription) => {
         const plan = plansById.get(subscription.planId);
         const nextChargeAt = subscription.nextChargeAt || subscription.currentPeriodEnd;
@@ -146,21 +146,38 @@ export default function MerchantBillingCyclesPage() {
           });
           attemptId = attemptContext.attemptId;
 
-          const encryptedInput = instance.createEncryptedInput(subscription.customerCardAddress, me.account as Hex);
-          encryptedInput.add64(amountRaw);
-          const { handles } = await encryptedInput.encrypt();
-
-          const call = {
-            dest: subscription.customerCardAddress as Hex,
-            value: 0n,
-            data: encodeFunctionData({
-              abi: PRIVATE_CARD_ABI,
-              functionName: subscription.subscriptionRef ? 'pullSubscriptionRef' : 'pullSubscription',
-              args: subscription.subscriptionRef
-                ? [subscription.subscriptionRef as Hex, toHex(handles[0], { size: 32 })]
-                : [toHex(handles[0], { size: 32 })],
-            }),
+          let call: {
+            dest: Hex;
+            value: bigint;
+            data: Hex;
           };
+
+          if (subscription.subscriptionRef) {
+            call = {
+              dest: subscription.customerCardAddress as Hex,
+              value: 0n,
+              data: encodeFunctionData({
+                abi: PRIVATE_CARD_ABI,
+                functionName: 'chargeSubscriptionRefRenewal',
+                args: [subscription.subscriptionRef as Hex],
+              }),
+            };
+          } else {
+            const encryptedInput = instance.createEncryptedInput(subscription.customerCardAddress, me.account as Hex);
+            encryptedInput.add64(amountRaw);
+            const { handles, inputProof } = await encryptedInput.encrypt();
+            const inputProofHex = `0x${Array.from(inputProof).map((byte) => byte.toString(16).padStart(2, '0')).join('')}` as Hex;
+
+            call = {
+              dest: subscription.customerCardAddress as Hex,
+              value: 0n,
+              data: encodeFunctionData({
+                abi: PRIVATE_CARD_ABI,
+                functionName: 'pullSubscriptionWithProof',
+                args: [toHex(handles[0], { size: 32 }), inputProofHex],
+              }),
+            };
+          }
 
           const userOp = await builder.buildUserOp({
             calls: [call],
@@ -235,24 +252,42 @@ export default function MerchantBillingCyclesPage() {
       });
       attemptId = attemptContext.attemptId;
 
-      const encryptedInput = instance.createEncryptedInput(customerCard, me.account as Hex);
-      encryptedInput.add64(amountRaw);
-      const { handles } = await encryptedInput.encrypt();
       const loadedSubscription = availableSubscriptions.find((subscription) => subscription.id === selectedSubscriptionId);
       const selectedSubscriptionRef = loadedSubscription?.subscriptionRef;
 
       smartWallet.init();
-      const call = {
-        dest: customerCard as Hex,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: PRIVATE_CARD_ABI,
-          functionName: selectedSubscriptionRef ? 'pullSubscriptionRef' : 'pullSubscription',
-          args: selectedSubscriptionRef
-            ? [selectedSubscriptionRef as Hex, toHex(handles[0], { size: 32 })]
-            : [toHex(handles[0], { size: 32 })],
-        }),
+      let call: {
+        dest: Hex;
+        value: bigint;
+        data: Hex;
       };
+
+      if (selectedSubscriptionRef) {
+        call = {
+          dest: customerCard as Hex,
+          value: 0n,
+          data: encodeFunctionData({
+            abi: PRIVATE_CARD_ABI,
+            functionName: 'chargeSubscriptionRefRenewal',
+            args: [selectedSubscriptionRef as Hex],
+          }),
+        };
+      } else {
+        const encryptedInput = instance.createEncryptedInput(customerCard, me.account as Hex);
+        encryptedInput.add64(amountRaw);
+        const { handles, inputProof } = await encryptedInput.encrypt();
+        const inputProofHex = `0x${Array.from(inputProof).map((byte) => byte.toString(16).padStart(2, '0')).join('')}` as Hex;
+
+        call = {
+          dest: customerCard as Hex,
+          value: 0n,
+          data: encodeFunctionData({
+            abi: PRIVATE_CARD_ABI,
+            functionName: 'pullSubscriptionWithProof',
+            args: [toHex(handles[0], { size: 32 }), inputProofHex],
+          }),
+        };
+      }
 
       const userOp = await builder.buildUserOp({
         calls: [call],

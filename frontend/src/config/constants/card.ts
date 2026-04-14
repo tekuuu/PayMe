@@ -311,6 +311,93 @@ export const PRIVATE_CARD_ABI = [
         "type": "event"
     },
     {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "bytes32",
+                "name": "subscriptionRef",
+                "type": "bytes32"
+            },
+            {
+                "indexed": false,
+                "internalType": "bool",
+                "name": "enabled",
+                "type": "bool"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "paidThrough",
+                "type": "uint256"
+            }
+        ],
+        "name": "SubscriptionRefCancelAtPeriodEndSet",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "bytes32",
+                "name": "subscriptionRef",
+                "type": "bytes32"
+            },
+            {
+                "indexed": true,
+                "internalType": "bytes32",
+                "name": "planRef",
+                "type": "bytes32"
+            },
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "collector",
+                "type": "address"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "paidThrough",
+                "type": "uint256"
+            }
+        ],
+        "name": "SubscriptionRefRenewalCharged",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "bytes32",
+                "name": "subscriptionRef",
+                "type": "bytes32"
+            },
+            {
+                "indexed": true,
+                "internalType": "bytes32",
+                "name": "planRef",
+                "type": "bytes32"
+            },
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "collector",
+                "type": "address"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "paidThrough",
+                "type": "uint256"
+            }
+        ],
+        "name": "SubscriptionRefSubscribedAndCharged",
+        "type": "event"
+    },
+    {
         "inputs": [
             {
                 "internalType": "address",
@@ -329,6 +416,34 @@ export const PRIVATE_CARD_ABI = [
             }
         ],
         "name": "approveSubscription",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "merchant",
+                "type": "address"
+            },
+            {
+                "internalType": "externalEuint64",
+                "name": "encryptedMaxPerPeriod",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "bytes",
+                "name": "inputProof",
+                "type": "bytes"
+            },
+            {
+                "internalType": "uint256",
+                "name": "periodSeconds",
+                "type": "uint256"
+            }
+        ],
+        "name": "approveSubscriptionWithProof",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -362,6 +477,57 @@ export const PRIVATE_CARD_ABI = [
             }
         ],
         "name": "approveSubscriptionRef",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "collector",
+                "type": "address"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "planRef",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "subscriptionRef",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "externalEuint64",
+                "name": "encryptedMaxPerPeriod",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "bytes",
+                "name": "inputProof",
+                "type": "bytes"
+            },
+            {
+                "internalType": "uint256",
+                "name": "periodSeconds",
+                "type": "uint256"
+            }
+        ],
+        "name": "approveSubscriptionRefWithProof",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "subscriptionRef",
+                "type": "bytes32"
+            }
+        ],
+        "name": "chargeSubscriptionRefRenewal",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -519,12 +685,31 @@ export const PRIVATE_CARD_ABI = [
             },
             {
                 "internalType": "uint256",
-                "name": "lastReset",
+                "name": "paidThrough",
                 "type": "uint256"
             },
             {
                 "internalType": "bool",
                 "name": "active",
+                "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "subscriptionRef",
+                "type": "bytes32"
+            }
+        ],
+        "name": "getSubscriptionRefCancelAtPeriodEnd",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
                 "type": "bool"
             }
         ],
@@ -547,6 +732,24 @@ export const PRIVATE_CARD_ABI = [
     {
         "inputs": [
             {
+                "internalType": "externalEuint64",
+                "name": "encryptedAmount",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "bytes",
+                "name": "inputProof",
+                "type": "bytes"
+            }
+        ],
+        "name": "pullSubscriptionWithProof",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
                 "internalType": "bytes32",
                 "name": "subscriptionRef",
                 "type": "bytes32"
@@ -558,6 +761,29 @@ export const PRIVATE_CARD_ABI = [
             }
         ],
         "name": "pullSubscriptionRef",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "subscriptionRef",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "externalEuint64",
+                "name": "encryptedAmount",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "bytes",
+                "name": "inputProof",
+                "type": "bytes"
+            }
+        ],
+        "name": "pullSubscriptionRefWithProof",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -612,6 +838,62 @@ export const PRIVATE_CARD_ABI = [
     {
         "inputs": [],
         "name": "syncOwnerBalanceAcl",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "collector",
+                "type": "address"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "planRef",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "subscriptionRef",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "externalEuint64",
+                "name": "encryptedMaxPerPeriod",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "bytes",
+                "name": "inputProof",
+                "type": "bytes"
+            },
+            {
+                "internalType": "uint256",
+                "name": "periodSeconds",
+                "type": "uint256"
+            }
+        ],
+        "name": "subscribeAndChargeRefWithProof",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "subscriptionRef",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "bool",
+                "name": "enabled",
+                "type": "bool"
+            }
+        ],
+        "name": "setSubscriptionRefCancelAtPeriodEnd",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
