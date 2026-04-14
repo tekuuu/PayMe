@@ -25,10 +25,10 @@ contract PrivateCard is ZamaEthereumConfig {
         address collector;
         bytes32 planRef;
         euint64 maxPerPeriod;
-        euint64 spentThisPeriod;
         uint256 periodSeconds;
-        uint256 lastReset;
+        uint256 paidThrough;
         bool active;
+        bool cancelAtPeriodEnd;
     }
 
     mapping(address => Subscription) public subscriptions;
@@ -42,6 +42,9 @@ contract PrivateCard is ZamaEthereumConfig {
     event SubscriptionRefApproved(bytes32 indexed subscriptionRef, bytes32 indexed planRef, address indexed collector, euint64 maxPerPeriod);
     event SubscriptionRefPull(bytes32 indexed subscriptionRef, bytes32 indexed planRef, address indexed collector, euint64 amount);
     event SubscriptionRefCanceled(bytes32 indexed subscriptionRef, address indexed collector);
+    event SubscriptionRefCancelAtPeriodEndSet(bytes32 indexed subscriptionRef, bool enabled, uint256 paidThrough);
+    event SubscriptionRefRenewalCharged(bytes32 indexed subscriptionRef, bytes32 indexed planRef, address indexed collector, uint256 paidThrough);
+    event SubscriptionRefSubscribedAndCharged(bytes32 indexed subscriptionRef, bytes32 indexed planRef, address indexed collector, uint256 paidThrough);
     event BalanceAclSynced(address indexed grantee);
 
     constructor(address _owner, address _cUSDC) {
@@ -118,6 +121,32 @@ contract PrivateCard is ZamaEthereumConfig {
         emit SubscriptionApproved(merchant, val);
     }
 
+    /// @notice Proof-based subscription approval for encrypted external inputs.
+    function approveSubscriptionWithProof(
+        address merchant,
+        externalEuint64 encryptedMaxPerPeriod,
+        bytes calldata inputProof,
+        uint256 periodSeconds
+    ) external {
+        require(msg.sender == owner, "Only wallet");
+        require(merchant != address(0), "Invalid merchant");
+        require(periodSeconds > 0, "Invalid period");
+
+        euint64 val = FHE.fromExternal(encryptedMaxPerPeriod, inputProof);
+
+        subscriptions[merchant] = Subscription({
+            maxPerPeriod: val,
+            spentThisPeriod: FHE.asEuint64(0),
+            periodSeconds: periodSeconds,
+            lastReset: block.timestamp
+        });
+
+        FHE.allowThis(subscriptions[merchant].maxPerPeriod);
+        FHE.allowThis(subscriptions[merchant].spentThisPeriod);
+
+        emit SubscriptionApproved(merchant, val);
+    }
+
     // ── Merchant pulls subscription payment ─────────────────────────────────────
     function pullSubscription(euint64 encryptedAmount) external {
         Subscription storage sub = subscriptions[msg.sender];
@@ -143,8 +172,71 @@ contract PrivateCard is ZamaEthereumConfig {
         emit SubscriptionPull(msg.sender, allowed);
     }
 
-    /// @notice Privacy-first approval flow using opaque references.
-    /// @dev No merchant/company/plan human-readable metadata is stored on-chain.
+    /// @notice Proof-based merchant pull for encrypted external inputs.
+    function pullSubscriptionWithProof(externalEuint64 encryptedAmount, bytes calldata inputProof) external {
+        euint64 decodedAmount = FHE.fromExternal(encryptedAmount, inputProof);
+        Subscription storage sub = subscriptions[msg.sender];
+        require(FHE.isInitialized(sub.maxPerPeriod), "No subscription");
+
+        if (block.timestamp >= sub.lastReset + sub.periodSeconds) {
+            sub.spentThisPeriod = FHE.asEuint64(0);
+            sub.lastReset = block.timestamp;
+        }
+
+        ebool withinLimit = FHE.le(
+            FHE.add(sub.spentThisPeriod, decodedAmount),
+            sub.maxPerPeriod
+        );
+        euint64 allowed = FHE.select(withinLimit, decodedAmount, FHE.asEuint64(0));
+
+        _sendConfidential(msg.sender, allowed);
+        sub.spentThisPeriod = FHE.add(sub.spentThisPeriod, allowed);
+
+        _syncOwnerBalanceAcl();
+
+        emit SubscriptionPull(msg.sender, allowed);
+    }
+
+    function _upsertSubscriptionRef(
+        address collector,
+        bytes32 planRef,
+        bytes32 subscriptionRef,
+        euint64 recurringAmount,
+        uint256 periodSeconds
+    ) internal returns (SubscriptionRefApproval storage sub) {
+        sub = subscriptionRefApprovals[subscriptionRef];
+        bool isNew = sub.collector == address(0);
+
+        sub.collector = collector;
+        sub.planRef = planRef;
+        sub.maxPerPeriod = recurringAmount;
+        sub.periodSeconds = periodSeconds;
+        sub.active = true;
+        if (isNew) {
+            // Keep newly-created subscriptions due immediately until first successful charge.
+            sub.paidThrough = block.timestamp;
+        }
+
+        merchantPlanToSubscriptionRef[collector][planRef] = subscriptionRef;
+        FHE.allowThis(sub.maxPerPeriod);
+
+        emit SubscriptionRefApproved(subscriptionRef, planRef, collector, recurringAmount);
+    }
+
+    function _chargeSubscriptionRef(
+        bytes32 subscriptionRef,
+        SubscriptionRefApproval storage sub
+    ) internal {
+        _sendConfidential(sub.collector, sub.maxPerPeriod);
+        sub.paidThrough = block.timestamp + sub.periodSeconds;
+        _syncOwnerBalanceAcl();
+
+        emit SubscriptionRefPull(subscriptionRef, sub.planRef, sub.collector, sub.maxPerPeriod);
+        emit SubscriptionRefRenewalCharged(subscriptionRef, sub.planRef, sub.collector, sub.paidThrough);
+    }
+
+    /// @notice Configure a subscription reference without charging immediately.
+    /// @dev Kept for backwards compatibility with allowance update flows.
     function approveSubscriptionRef(
         address collector,
         bytes32 planRef,
@@ -158,49 +250,106 @@ contract PrivateCard is ZamaEthereumConfig {
         require(periodSeconds > 0, "Invalid period");
 
         euint64 val = euint64.wrap(bytes32(encryptedMaxPerPeriod));
-
-        SubscriptionRefApproval storage sub = subscriptionRefApprovals[subscriptionRef];
-        sub.collector = collector;
-        sub.planRef = planRef;
-        sub.maxPerPeriod = val;
-        sub.spentThisPeriod = FHE.asEuint64(0);
-        sub.periodSeconds = periodSeconds;
-        sub.lastReset = block.timestamp;
-        sub.active = true;
-
-        merchantPlanToSubscriptionRef[collector][planRef] = subscriptionRef;
-
-        FHE.allowThis(sub.maxPerPeriod);
-        FHE.allowThis(sub.spentThisPeriod);
-
-        emit SubscriptionRefApproved(subscriptionRef, planRef, collector, val);
+        _upsertSubscriptionRef(collector, planRef, subscriptionRef, val, periodSeconds);
     }
 
-    /// @notice Merchant pull flow using opaque subscription reference.
-    function pullSubscriptionRef(bytes32 subscriptionRef, euint64 encryptedAmount) external {
+    /// @notice Configure a subscription reference without charging immediately.
+    /// @dev Kept for backwards compatibility with allowance update flows.
+    function approveSubscriptionRefWithProof(
+        address collector,
+        bytes32 planRef,
+        bytes32 subscriptionRef,
+        externalEuint64 encryptedMaxPerPeriod,
+        bytes calldata inputProof,
+        uint256 periodSeconds
+    ) external {
+        require(msg.sender == owner, "Only wallet");
+        require(collector != address(0), "Invalid collector");
+        require(subscriptionRef != bytes32(0), "Invalid subscription ref");
+        require(periodSeconds > 0, "Invalid period");
+
+        euint64 val = FHE.fromExternal(encryptedMaxPerPeriod, inputProof);
+        _upsertSubscriptionRef(collector, planRef, subscriptionRef, val, periodSeconds);
+    }
+
+    /// @notice Netflix-style prepaid subscribe flow.
+    /// @dev Registers recurring amount and charges first period atomically.
+    function subscribeAndChargeRefWithProof(
+        address collector,
+        bytes32 planRef,
+        bytes32 subscriptionRef,
+        externalEuint64 encryptedMaxPerPeriod,
+        bytes calldata inputProof,
+        uint256 periodSeconds
+    ) external {
+        require(msg.sender == owner, "Only wallet");
+        require(collector != address(0), "Invalid collector");
+        require(subscriptionRef != bytes32(0), "Invalid subscription ref");
+        require(periodSeconds > 0, "Invalid period");
+
+        euint64 val = FHE.fromExternal(encryptedMaxPerPeriod, inputProof);
+        SubscriptionRefApproval storage sub = _upsertSubscriptionRef(
+            collector,
+            planRef,
+            subscriptionRef,
+            val,
+            periodSeconds
+        );
+        sub.cancelAtPeriodEnd = false;
+
+        _chargeSubscriptionRef(subscriptionRef, sub);
+        emit SubscriptionRefSubscribedAndCharged(subscriptionRef, planRef, collector, sub.paidThrough);
+    }
+
+    /// @notice Merchant renewal charge. Callable only by approved collector when due.
+    function chargeSubscriptionRefRenewal(bytes32 subscriptionRef) external {
         SubscriptionRefApproval storage sub = subscriptionRefApprovals[subscriptionRef];
         require(sub.active, "Inactive subscription ref");
         require(sub.collector == msg.sender, "Unauthorized collector");
+        require(!sub.cancelAtPeriodEnd, "Cancel scheduled");
         require(FHE.isInitialized(sub.maxPerPeriod), "No subscription ref approval");
+        require(block.timestamp >= sub.paidThrough, "Charge not due");
 
-        if (block.timestamp >= sub.lastReset + sub.periodSeconds) {
-            sub.spentThisPeriod = FHE.asEuint64(0);
-            sub.lastReset = block.timestamp;
-        }
+        _chargeSubscriptionRef(subscriptionRef, sub);
+    }
 
-        ebool withinLimit = FHE.le(
-            FHE.add(sub.spentThisPeriod, encryptedAmount),
-            sub.maxPerPeriod
-        );
-        euint64 allowed = FHE.select(withinLimit, encryptedAmount, FHE.asEuint64(0));
+    /// @notice Backwards-compatible alias for renewal pull API.
+    function pullSubscriptionRef(bytes32 subscriptionRef, euint64) external {
+        SubscriptionRefApproval storage sub = subscriptionRefApprovals[subscriptionRef];
+        require(sub.active, "Inactive subscription ref");
+        require(sub.collector == msg.sender, "Unauthorized collector");
+        require(!sub.cancelAtPeriodEnd, "Cancel scheduled");
+        require(FHE.isInitialized(sub.maxPerPeriod), "No subscription ref approval");
+        require(block.timestamp >= sub.paidThrough, "Charge not due");
 
-        _sendConfidential(msg.sender, allowed);
-        sub.spentThisPeriod = FHE.add(sub.spentThisPeriod, allowed);
-        FHE.allowThis(sub.spentThisPeriod);
+        _chargeSubscriptionRef(subscriptionRef, sub);
+    }
 
-        _syncOwnerBalanceAcl();
+    /// @notice Backwards-compatible alias for proof-based renewal pull API.
+    function pullSubscriptionRefWithProof(
+        bytes32 subscriptionRef,
+        externalEuint64,
+        bytes calldata
+    ) external {
+        SubscriptionRefApproval storage sub = subscriptionRefApprovals[subscriptionRef];
+        require(sub.active, "Inactive subscription ref");
+        require(sub.collector == msg.sender, "Unauthorized collector");
+        require(!sub.cancelAtPeriodEnd, "Cancel scheduled");
+        require(FHE.isInitialized(sub.maxPerPeriod), "No subscription ref approval");
+        require(block.timestamp >= sub.paidThrough, "Charge not due");
 
-        emit SubscriptionRefPull(subscriptionRef, sub.planRef, msg.sender, allowed);
+        _chargeSubscriptionRef(subscriptionRef, sub);
+    }
+
+    /// @notice Schedule or remove end-of-period cancellation.
+    function setSubscriptionRefCancelAtPeriodEnd(bytes32 subscriptionRef, bool enabled) external {
+        require(msg.sender == owner, "Only wallet");
+        SubscriptionRefApproval storage sub = subscriptionRefApprovals[subscriptionRef];
+        require(sub.collector != address(0), "Unknown subscription ref");
+        require(sub.active, "Inactive subscription ref");
+
+        sub.cancelAtPeriodEnd = enabled;
+        emit SubscriptionRefCancelAtPeriodEndSet(subscriptionRef, enabled, sub.paidThrough);
     }
 
     function cancelSubscriptionRef(bytes32 subscriptionRef) external {
@@ -208,6 +357,7 @@ contract PrivateCard is ZamaEthereumConfig {
         SubscriptionRefApproval storage sub = subscriptionRefApprovals[subscriptionRef];
         require(sub.collector != address(0), "Unknown subscription ref");
         sub.active = false;
+        sub.cancelAtPeriodEnd = false;
         emit SubscriptionRefCanceled(subscriptionRef, sub.collector);
     }
 
@@ -218,10 +368,14 @@ contract PrivateCard is ZamaEthereumConfig {
     function getSubscriptionRefMeta(bytes32 subscriptionRef)
         external
         view
-        returns (address collector, bytes32 planRef, uint256 periodSeconds, uint256 lastReset, bool active)
+        returns (address collector, bytes32 planRef, uint256 periodSeconds, uint256 paidThrough, bool active)
     {
         SubscriptionRefApproval storage sub = subscriptionRefApprovals[subscriptionRef];
-        return (sub.collector, sub.planRef, sub.periodSeconds, sub.lastReset, sub.active);
+        return (sub.collector, sub.planRef, sub.periodSeconds, sub.paidThrough, sub.active);
+    }
+
+    function getSubscriptionRefCancelAtPeriodEnd(bytes32 subscriptionRef) external view returns (bool) {
+        return subscriptionRefApprovals[subscriptionRef].cancelAtPeriodEnd;
     }
 
     /// @notice Sync ACL so the card owner can user-decrypt current card balance handle.

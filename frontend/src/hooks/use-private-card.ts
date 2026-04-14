@@ -2,15 +2,19 @@
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useReadContract } from 'wagmi';
-import { decodeEventLog, encodeFunctionData, getAddress, Hex, isAddress, zeroAddress } from 'viem';
+import { decodeEventLog, encodeFunctionData, getAddress, Hex, isAddress, toHex, zeroAddress } from 'viem';
 import {
     CARD_FACTORY_ABI,
+    ENTRYPOINT_ADDRESS,
     PRIVATE_CARD_ABI,
     PRIVATE_CARD_FACTORY_ADDRESS,
     CHAIN
 } from '@/config/constants';
 import { smartWallet } from '@/lib/smart-wallet';
 import { UserOpBuilder } from '@/lib/smart-wallet/service/userOps';
+import { UserOperationAsHex } from '@/lib/smart-wallet/service/userOps/types';
+import { ensureUserOpPrefund } from '@/lib/smart-wallet/service/userOps/prefund';
+import { describeExecutionRevertReason } from '@/lib/smart-wallet/revert-decode';
 import { Me } from '@/providers/auth-provider';
 import { toast } from 'sonner';
 
@@ -66,6 +70,132 @@ function linkedCardsStorageKey(account: Hex) {
 
 function hiddenCardsStorageKey(account: Hex) {
     return `payme.hiddenCards.${account.toLowerCase()}`;
+}
+
+function maxBigInt(values: bigint[]) {
+    let best = values[0] ?? 0n;
+    for (const value of values) {
+        if (value > best) best = value;
+    }
+    return best;
+}
+
+function isRetryableUserOpGasError(error: unknown) {
+    const message = String((error as any)?.message || '').toLowerCase();
+    return (
+        message.includes('aa40') ||
+        message.includes('over verificationgaslimit') ||
+        message.includes('aa23') ||
+        message.includes('reverted (or oog)') ||
+        message.includes('preverificationgas is not enough')
+    );
+}
+
+function hardenCreateCardUserOpGas(userOp: UserOperationAsHex): UserOperationAsHex {
+    const call = BigInt(userOp.callGasLimit);
+    const verification = BigInt(userOp.verificationGasLimit);
+    const pre = BigInt(userOp.preVerificationGas);
+    return {
+        ...userOp,
+        callGasLimit: toHex(maxBigInt([call, 400_000n])),
+        verificationGasLimit: toHex(maxBigInt([verification, 1_100_000n])),
+        preVerificationGas: toHex(maxBigInt([pre, 170_000n])),
+    };
+}
+
+function bumpCreateCardUserOpGas(userOp: UserOperationAsHex): UserOperationAsHex {
+    const call = BigInt(userOp.callGasLimit);
+    const verification = BigInt(userOp.verificationGasLimit);
+    const pre = BigInt(userOp.preVerificationGas);
+    const bump = (value: bigint, bps: bigint, extra: bigint) =>
+        ((value * (10_000n + bps) + 9_999n) / 10_000n) + extra;
+
+    return {
+        ...userOp,
+        callGasLimit: toHex(maxBigInt([bump(call, 3500n, 60_000n), 500_000n])),
+        verificationGasLimit: toHex(maxBigInt([bump(verification, 7000n, 200_000n), 1_400_000n])),
+        preVerificationGas: toHex(maxBigInt([bump(pre, 4000n, 20_000n), 190_000n])),
+    };
+}
+
+const ENTRYPOINT_REVERT_EVENT_ABI = [
+    {
+        anonymous: false,
+        type: 'event',
+        name: 'UserOperationRevertReason',
+        inputs: [
+            { indexed: true, name: 'userOpHash', type: 'bytes32' },
+            { indexed: true, name: 'sender', type: 'address' },
+            { indexed: false, name: 'nonce', type: 'uint256' },
+            { indexed: false, name: 'revertReason', type: 'bytes' },
+        ],
+    },
+] as const;
+
+function extractCreatedCardFromReceipt(receipt: any): Hex | undefined {
+    const logs = Array.isArray(receipt?.logs) ? receipt.logs : [];
+
+    for (const log of logs) {
+        if (!log?.address) continue;
+        if (log.address.toLowerCase() !== (PRIVATE_CARD_FACTORY_ADDRESS as string).toLowerCase()) continue;
+
+        try {
+            const decoded = decodeEventLog({ abi: CARD_FACTORY_ABI, data: log.data, topics: log.topics });
+            if (decoded?.eventName === 'CardCreated') {
+                const created = decoded.args?.card as Hex | undefined;
+                if (created && created !== zeroAddress) {
+                    return normalizeAddress(created);
+                }
+            }
+        } catch {
+            // ignore non-matching logs
+        }
+    }
+
+    return undefined;
+}
+
+function extractUserOpFailureReason(receipt: any): string {
+    const directReason =
+        receipt?.receipt?.revertReason ||
+        receipt?.reason ||
+        receipt?.error ||
+        receipt?.message;
+
+    const decodedDirectReason = describeExecutionRevertReason(directReason);
+    if (decodedDirectReason && decodedDirectReason.trim().length > 0 && decodedDirectReason !== 'unknown') {
+        return decodedDirectReason;
+    }
+
+    const logs = Array.isArray(receipt?.logs) ? receipt.logs : [];
+    for (const log of logs) {
+        if (!log?.address) continue;
+        if (log.address.toLowerCase() !== ENTRYPOINT_ADDRESS.toLowerCase()) continue;
+
+        try {
+            const decoded = decodeEventLog({
+                abi: ENTRYPOINT_REVERT_EVENT_ABI,
+                data: log.data,
+                topics: log.topics,
+            });
+
+            if (decoded?.eventName === 'UserOperationRevertReason') {
+                const rawReason = decoded.args?.revertReason as Hex | undefined;
+                const parsedReason = describeExecutionRevertReason(rawReason);
+                if (parsedReason && parsedReason.trim().length > 0) {
+                    return parsedReason;
+                }
+
+                if (rawReason && rawReason !== '0x') {
+                    return rawReason;
+                }
+            }
+        } catch {
+            // ignore non-matching logs
+        }
+    }
+
+    return 'unknown';
 }
 
 function readStoredLinkedCards(account?: Hex): StoredLinkedCard[] {
@@ -391,7 +521,7 @@ export function usePrivateCard(me: Me | null) {
 
         setIsCreating(true);
         try {
-            // Top-up is handled during initial wallet creation; skip here.
+            const baselineOwnedSet = new Set(ownedCardAddresses.map((address) => address.toLowerCase()));
             smartWallet.init();
 
             // 1. Encode the createCard call
@@ -406,54 +536,71 @@ export function usePrivateCard(me: Me | null) {
             };
 
             // 3. Build UserOperation
-            const userOp = await builder.buildUserOp({
+            const baseUserOp = await builder.buildUserOp({
                 calls: [call],
                 keyId: me.keyId
             });
 
-            // 4. Send and wait for receipt
-            const hash = await smartWallet.sendUserOperation({ userOp });
-            const receipt = await smartWallet.waitForUserOperationReceipt({ hash });
+            const submit = async (candidate: UserOperationAsHex) => {
+                await ensureUserOpPrefund({
+                    account: me.account as Hex,
+                    userOp: candidate,
+                });
+                const hash = await smartWallet.sendUserOperation({ userOp: candidate });
+                return smartWallet.waitForUserOperationReceipt({ hash });
+            };
+
+            const userOp = hardenCreateCardUserOpGas(baseUserOp);
+            let receipt: any;
+            let usedFallbackGas = false;
+            try {
+                receipt = await submit(userOp);
+            } catch (error) {
+                if (!isRetryableUserOpGasError(error)) {
+                    throw error;
+                }
+                usedFallbackGas = true;
+                receipt = await submit(bumpCreateCardUserOpGas(userOp));
+            }
 
             console.log('[createCard] userOp receipt:', receipt);
 
-            if (!receipt || receipt.success === false || receipt.receipt?.status !== '0x1') {
-                const reason = receipt?.receipt?.revertReason || 'unknown';
-                throw new Error(`UserOperation failed to execute: success=${receipt?.success ?? 'null'} status=${receipt?.receipt?.status ?? 'null'} reason=${reason}`);
+            if (typeof window !== 'undefined') {
+                try { window.localStorage.setItem('payme.lastCreateReceipt', JSON.stringify(receipt)); } catch { void 0; }
             }
 
-            // Persist receipt for debugging and try to decode CardCreated from logs immediately.
-            try {
+            const applyCreatedCard = async (createdCard: Hex) => {
+                try { if (typeof window !== 'undefined') window.localStorage.setItem('payme.lastCreatedCard', createdCard); } catch { void 0; }
+                setHiddenCardAddresses((current) => current.filter((address) => !sameAddress(address, createdCard)));
+                setLinkedCards((current) => current.filter((entry) => !sameAddress(entry.address, createdCard)));
+                setSelectedCardAddressState(normalizeAddress(createdCard));
+                await refetch();
+                console.log('[createCard] card created at', createdCard);
+                toast.success('Private Card successfully created!');
+            };
+
+            const createdFromReceipt = extractCreatedCardFromReceipt(receipt);
+            if (createdFromReceipt) {
+                await applyCreatedCard(createdFromReceipt);
+                return;
+            }
+
+            const receiptLooksFailed = !receipt || receipt.success === false || receipt.receipt?.status !== '0x1';
+            if (receiptLooksFailed && !usedFallbackGas) {
+                const bumpedUserOp = bumpCreateCardUserOpGas(userOp);
+                const bumpedReceipt = await submit(bumpedUserOp);
+                console.log('[createCard] userOp receipt (fallback gas):', bumpedReceipt);
+
                 if (typeof window !== 'undefined') {
-                    try { window.localStorage.setItem('payme.lastCreateReceipt', JSON.stringify(receipt)); } catch {}
+                    try { window.localStorage.setItem('payme.lastCreateReceipt', JSON.stringify(bumpedReceipt)); } catch { void 0; }
                 }
 
-                const logs = Array.isArray(receipt?.logs) ? receipt.logs : [];
-                for (const log of logs) {
-                    if (!log?.address) continue;
-                    if (log.address.toLowerCase() !== (PRIVATE_CARD_FACTORY_ADDRESS as string).toLowerCase()) continue;
-                    try {
-                        const decoded = decodeEventLog({ abi: CARD_FACTORY_ABI, data: log.data, topics: log.topics });
-                        console.log('[createCard] decoded log:', decoded);
-                        if (decoded?.eventName === 'CardCreated') {
-                            const created = decoded.args?.card as Hex | undefined;
-                            if (created && created !== zeroAddress) {
-                                try { if (typeof window !== 'undefined') window.localStorage.setItem('payme.lastCreatedCard', created); } catch {}
-                                setHiddenCardAddresses((current) => current.filter((address) => !sameAddress(address, created)));
-                                setLinkedCards((current) => current.filter((entry) => !sameAddress(entry.address, created)));
-                                setSelectedCardAddressState(normalizeAddress(created));
-                                await refetch();
-                                console.log('[createCard] card created at (from log)', created);
-                                toast.success("Private Card successfully created!");
-                                return;
-                            }
-                        }
-                    } catch (e) {
-                        console.warn('[createCard] failed to decode log', e);
-                    }
+                receipt = bumpedReceipt;
+                const createdFromFallbackReceipt = extractCreatedCardFromReceipt(bumpedReceipt);
+                if (createdFromFallbackReceipt) {
+                    await applyCreatedCard(createdFromFallbackReceipt);
+                    return;
                 }
-            } catch (e) {
-                console.warn('[createCard] receipt handling error', e);
             }
 
             // Poll the factory for the created card address (fallback for slow RPC/indexing).
@@ -466,13 +613,15 @@ export function usePrivateCard(me: Me | null) {
                         functionName: 'getCards',
                         args: [me.account as Hex],
                     }) as Hex[];
-                    const latestCard = uniqueAddresses(
+                    const freshUniqueCards = uniqueAddresses(
                         (Array.isArray(freshCards) ? freshCards : []).filter((address) => !!address && address !== zeroAddress)
-                    ).at(-1);
+                    );
+
+                    const newCard = freshUniqueCards.find((address) => !baselineOwnedSet.has(address.toLowerCase()));
 
                     console.log(`[createCard] poll #${i} getCards ->`, freshCards);
-                    if (latestCard) {
-                        found = latestCard as string;
+                    if (newCard) {
+                        found = newCard as string;
                         break;
                     }
                 } catch (e) {
@@ -490,9 +639,10 @@ export function usePrivateCard(me: Me | null) {
                 console.log('[createCard] card created at', found);
                 toast.success("Private Card successfully created!");
             } else {
-                console.warn('[createCard] card address not found after polling');
-                await refetch();
-                toast.success("Private Card created (pending index). Please refresh if it does not appear.");
+                const reason = extractUserOpFailureReason(receipt);
+                throw new Error(
+                    `UserOperation failed to execute: success=${receipt?.success ?? 'null'} status=${receipt?.receipt?.status ?? 'null'} reason=${reason}`
+                );
             }
         } catch (error: any) {
             console.error("Failed to create card:", error);
@@ -500,7 +650,7 @@ export function usePrivateCard(me: Me | null) {
         } finally {
             setIsCreating(false);
         }
-    }, [me, builder, refetch]);
+    }, [me, builder, refetch, ownedCardAddresses]);
 
     return {
         cards,
@@ -517,6 +667,7 @@ export function usePrivateCard(me: Me | null) {
         attachCardByAddress,
         searchCardsByOwner,
         removeCard,
+        resolveCard,
         refresh: refetch
     };
 }

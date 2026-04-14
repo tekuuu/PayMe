@@ -13,7 +13,7 @@ import type {
   SubscriptionAgreement,
   TerminalFailureStatus,
 } from '@/lib/merchant/types';
-import { encodeCheckoutSlug } from '@/lib/merchant/checkout-slug';
+import { decodeCheckoutSlug, encodeCheckoutSlug } from '@/lib/merchant/checkout-slug';
 
 const STATE_VERSION = 2;
 const DEFAULT_INTERVAL_SECONDS = 30 * 24 * 60 * 60;
@@ -76,6 +76,7 @@ export type RegisterSubscriptionApprovalInput = {
   amountHandle?: string;
   periodSeconds?: number;
   planName?: string;
+  activateImmediately?: boolean;
 };
 
 export type RegisterSubscriptionApprovalResult = {
@@ -180,19 +181,16 @@ function sanitizeState(
     const amountRefMicros = clampAmountRefMicros(plan?.amountRefMicros ?? plan?.amountRef);
     const status: PlanStatus =
       plan?.status === 'archived' || plan?.active === false ? 'archived' : 'active';
+    const existingCheckoutSlug = typeof plan?.checkoutSlug === 'string' && plan.checkoutSlug ? plan.checkoutSlug : '';
+    const existingPayload = existingCheckoutSlug ? decodeCheckoutSlug(existingCheckoutSlug) : null;
     const checkoutSlug =
-      typeof plan?.checkoutSlug === 'string' && plan.checkoutSlug
-        ? plan.checkoutSlug
+      existingPayload && existingPayload.v === 2
+        ? existingCheckoutSlug
         : encodeCheckoutSlug({
-            v: 1,
+            v: 2,
             merchantAddress: fallback.merchantAddress,
             planId: id,
             planRef,
-            name,
-            description,
-            interval,
-            billingIntervalSeconds,
-            amountRefMicros,
           });
 
     return {
@@ -216,10 +214,21 @@ function sanitizeState(
     const nextChargeAt = typeof sub?.nextChargeAt === 'string' ? sub.nextChargeAt : currentPeriodEnd;
     const normalizedPlanId = typeof sub?.planId === 'string' ? sub.planId : '';
     const planForSubscription = normalizedPlans.find((plan) => plan.id === normalizedPlanId);
-    const planRef =
+    const canonicalPlanRef = planForSubscription?.planRef;
+    let planRef =
       typeof sub?.planRef === 'string' && /^0x[0-9a-fA-F]{64}$/.test(sub.planRef)
         ? sub.planRef
         : (planForSubscription?.planRef || createOpaqueRef('plan_link', fallback.merchantAddress, normalizedPlanId));
+    // Privacy migration: do not keep canonical registry planRef in customer agreement records.
+    if (canonicalPlanRef && planRef.toLowerCase() === canonicalPlanRef.toLowerCase()) {
+      planRef = createOpaqueRef(
+        'approval_plan',
+        fallback.merchantAddress,
+        sub?.subscriptionRef,
+        sub?.customerCardAddress,
+        normalizedPlanId
+      );
+    }
     const subscriptionRef =
       typeof sub?.subscriptionRef === 'string' && /^0x[0-9a-fA-F]{64}$/.test(sub.subscriptionRef)
         ? sub.subscriptionRef
@@ -319,15 +328,10 @@ function ensurePlan(
       existing.amountRefMicros = clampAmountRefMicros(amountRefMicros);
       existing.updatedAt = nowIso();
       existing.checkoutSlug = encodeCheckoutSlug({
-        v: 1,
+        v: 2,
         merchantAddress: state.merchantAddress,
         planId: existing.id,
         planRef: existing.planRef || createOpaqueRef('plan', state.merchantAddress, existing.id),
-        name: existing.name,
-        description: existing.description || '',
-        interval: existing.interval,
-        billingIntervalSeconds: existing.billingIntervalSeconds,
-        amountRefMicros: existing.amountRefMicros,
       });
     }
     return existing;
@@ -349,15 +353,10 @@ function ensurePlan(
     updatedAt: timestamp,
   };
   plan.checkoutSlug = encodeCheckoutSlug({
-    v: 1,
+    v: 2,
     merchantAddress: state.merchantAddress,
     planId: plan.id,
     planRef: plan.planRef || createOpaqueRef('plan', state.merchantAddress, plan.id),
-    name: plan.name,
-    description: plan.description || '',
-    interval: plan.interval,
-    billingIntervalSeconds: plan.billingIntervalSeconds,
-    amountRefMicros: plan.amountRefMicros,
   });
   state.plans.unshift(plan);
   appendEvent(state, 'plan.created', plan.id, {
@@ -374,6 +373,7 @@ export function createPlanTemplate(input: {
   interval: PlanInterval;
   billingIntervalSeconds: number;
   amountRefMicros: string;
+  planRef?: string;
 }): MerchantPlan {
   const state = readMerchantState(input.merchantAddress);
   const timestamp = nowIso();
@@ -381,7 +381,10 @@ export function createPlanTemplate(input: {
   const plan: MerchantPlan = {
     id: createId('plan'),
     merchantAddress: state.merchantAddress,
-    planRef: createOpaqueRef('plan', state.merchantAddress, input.name),
+    planRef:
+      typeof input.planRef === 'string' && /^0x[0-9a-fA-F]{64}$/.test(input.planRef)
+        ? input.planRef
+        : createOpaqueRef('plan', state.merchantAddress, input.name),
     name: input.name.trim() || 'Untitled Plan',
     description: (input.description || '').trim(),
     interval: input.interval,
@@ -394,15 +397,10 @@ export function createPlanTemplate(input: {
   };
 
   plan.checkoutSlug = encodeCheckoutSlug({
-    v: 1,
+    v: 2,
     merchantAddress: state.merchantAddress,
     planId: plan.id,
     planRef: plan.planRef || createOpaqueRef('plan', state.merchantAddress, plan.id),
-    name: plan.name,
-    description: plan.description || '',
-    interval: plan.interval,
-    billingIntervalSeconds: plan.billingIntervalSeconds,
-    amountRefMicros: plan.amountRefMicros,
   });
 
   state.plans.unshift(plan);
@@ -435,15 +433,10 @@ export function updatePlanTemplate(
 
   plan.updatedAt = nowIso();
   plan.checkoutSlug = encodeCheckoutSlug({
-    v: 1,
+    v: 2,
     merchantAddress: state.merchantAddress,
     planId: plan.id,
     planRef: plan.planRef || createOpaqueRef('plan', state.merchantAddress, plan.id),
-    name: plan.name,
-    description: plan.description || '',
-    interval: plan.interval,
-    billingIntervalSeconds: plan.billingIntervalSeconds,
-    amountRefMicros: plan.amountRefMicros,
   });
 
   appendEvent(state, 'plan.updated', plan.id);
@@ -479,7 +472,10 @@ function ensureSubscription(
       existing.customerSmartWallet = params.customerSmartWallet;
     }
     existing.planId = params.plan.id;
-    existing.planRef = params.planRef || params.plan.planRef || existing.planRef;
+    existing.planRef =
+      existing.planRef ||
+      params.planRef ||
+      createOpaqueRef('approval_plan', state.merchantAddress, existing.subscriptionRef, card, params.plan.id);
     existing.subscriptionRef = params.subscriptionRef || existing.subscriptionRef;
     if (params.amountRefMicros) {
       existing.maxAllowanceRefMicros = params.amountRefMicros;
@@ -492,20 +488,22 @@ function ensureSubscription(
   }
 
   const start = now.toISOString();
-  const end = new Date(now.getTime() + params.plan.billingIntervalSeconds * 1000).toISOString();
   const subscription: SubscriptionAgreement = {
     id: createId('sub'),
     merchantAddress: state.merchantAddress,
     subscriptionRef: params.subscriptionRef || createOpaqueRef('sub', state.merchantAddress, card, params.plan.id),
-    planRef: params.planRef || params.plan.planRef,
+    planRef:
+      params.planRef ||
+      createOpaqueRef('approval_plan', state.merchantAddress, params.subscriptionRef, card, params.plan.id),
     customerCardAddress: card,
     customerSmartWallet: params.customerSmartWallet,
     planId: params.plan.id,
     status: 'incomplete',
     startedAt: start,
     currentPeriodStart: start,
-    currentPeriodEnd: end,
-    nextChargeAt: end,
+    // Prepaid model: first charge is due immediately and service becomes active only after payment.
+    currentPeriodEnd: start,
+    nextChargeAt: start,
     lastChargeAt: undefined,
     failureCount: 0,
     maxAllowanceRefMicros: params.amountRefMicros,
@@ -553,11 +551,6 @@ function ensureCurrentCycle(state: MerchantControlPlaneState, subscription: Subs
     createdAt: cycleStart,
     updatedAt: cycleStart,
   };
-
-  subscription.currentPeriodStart = cycleStart;
-  subscription.currentPeriodEnd = cycleEnd;
-  subscription.nextChargeAt = cycleEnd;
-  subscription.updatedAt = nowIso();
 
   state.cycles.unshift(cycle);
   appendEvent(state, 'billing_cycle.created', cycle.id, {
@@ -671,6 +664,7 @@ function finalizeFailure(
       if (subscription) {
         const terminalStatus = state.recoveryPolicy.terminalStatusOnExhausted;
         subscription.status = terminalStatus as TerminalFailureStatus;
+        subscription.nextChargeAt = undefined;
         subscription.updatedAt = timestampIso;
         if (terminalStatus === 'canceled') {
           subscription.canceledAt = timestampIso;
@@ -681,6 +675,7 @@ function finalizeFailure(
       cycle.nextAttemptAt = retryAtFromAttempt(state.recoveryPolicy, cycle.attemptCount, timestamp);
       if (subscription && subscription.status !== 'canceled' && subscription.status !== 'paused') {
         subscription.status = 'past_due';
+        subscription.nextChargeAt = cycle.nextAttemptAt;
         subscription.updatedAt = timestampIso;
       }
     }
@@ -839,9 +834,7 @@ export function registerSubscriptionApproval(
     amountHandle: input.amountHandle,
   });
 
-  const now = new Date();
-  const timestamp = now.toISOString();
-  const cycleEnd = new Date(now.getTime() + plan.billingIntervalSeconds * 1000).toISOString();
+  const timestamp = nowIso();
 
   subscription.planId = plan.id;
   subscription.planRef = input.planRef || plan.planRef || subscription.planRef;
@@ -849,12 +842,23 @@ export function registerSubscriptionApproval(
     subscription.subscriptionRef = input.subscriptionRef;
   }
   subscription.customerSmartWallet = input.customerSmartWallet || subscription.customerSmartWallet;
-  if (subscription.status !== 'active' && subscription.status !== 'paused') {
+  if (input.activateImmediately) {
+    const cycleEnd = new Date(Date.parse(timestamp) + plan.billingIntervalSeconds * 1000).toISOString();
+    subscription.status = 'active';
+    subscription.currentPeriodStart = timestamp;
+    subscription.currentPeriodEnd = cycleEnd;
+    subscription.nextChargeAt = cycleEnd;
+    subscription.lastChargeAt = timestamp;
+    subscription.failureCount = 0;
+  } else if (subscription.status !== 'active' && subscription.status !== 'paused') {
+    // Require successful first charge before service activation.
     subscription.status = 'incomplete';
+    subscription.currentPeriodStart = timestamp;
+    subscription.currentPeriodEnd = timestamp;
+    subscription.nextChargeAt = timestamp;
+  } else if (!subscription.nextChargeAt) {
+    subscription.nextChargeAt = subscription.currentPeriodEnd;
   }
-  subscription.currentPeriodStart = timestamp;
-  subscription.currentPeriodEnd = cycleEnd;
-  subscription.nextChargeAt = cycleEnd;
   if (input.amountRef) {
     subscription.maxAllowanceRefMicros = input.amountRef;
   }
@@ -964,6 +968,7 @@ export function retryBillingCycleNow(merchantAddress: string, cycleId: string) {
   const subscription = state.subscriptions.find((entry) => entry.id === cycle.subscriptionId);
   if (subscription && subscription.status !== 'canceled') {
     subscription.status = 'past_due';
+    subscription.nextChargeAt = cycle.nextAttemptAt;
     subscription.updatedAt = nowIso();
   }
 

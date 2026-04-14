@@ -27,6 +27,7 @@ export interface SubscriptionDataSource {
     interval: PlanInterval;
     billingIntervalSeconds: number;
     amountRefMicros: string;
+    planRef?: string;
   }): MerchantPlan;
 
   updatePlanTemplate(
@@ -55,4 +56,3 @@ export const localSubscriptionDataSource: SubscriptionDataSource = {
   finalizeBillingAttemptSuccess: (input) => finalizeBillingAttemptSuccess(input),
   finalizeBillingAttemptFailure: (input) => finalizeBillingAttemptFailure(input),
 };
-
