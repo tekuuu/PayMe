@@ -1,13 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useReadContract } from 'wagmi';
-import { Hex, isAddress, toHex, zeroAddress } from 'viem';
+import { Hex, encodeFunctionData, isAddress, toHex, zeroAddress } from 'viem';
 import { useFhevmContext } from '@/providers/fhevm-provider';
 import { useFHEDecrypt, useInMemoryStorage } from '@/lib/fhevm-sdk/react';
 import { useWagmiEthers } from '@/hooks/use-wagmi-ethers';
 import { useMe } from '@/providers/auth-provider';
-import { CUSDC_WRAPPER_ADDRESS } from '@/config/constants';
+import { CHAIN, CUSDC_WRAPPER_ADDRESS } from '@/config/constants';
+import { smartWallet } from '@/lib/smart-wallet';
+import { UserOpBuilder } from '@/lib/smart-wallet/service/userOps';
+import { ensureUserOpPrefund } from '@/lib/smart-wallet/service/userOps/prefund';
+import { describeExecutionRevertReason } from '@/lib/smart-wallet/revert-decode';
 
 const WRAPPER_READ_ABI = [
   {
@@ -19,11 +23,47 @@ const WRAPPER_READ_ABI = [
   },
 ] as const;
 
+const WRAPPER_WRITE_ABI = [
+  {
+    name: 'syncBalanceAcl',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'grantee', type: 'address' },
+    ],
+    outputs: [],
+  },
+] as const;
+
+// Route changes remount components, so keep decrypted balance in module memory.
+// This cache resets on full page refresh, matching the expected UX.
+const runtimeDecryptedBalanceCache = new Map<string, bigint>();
+
+function normalizeBalanceHandle(value: unknown): Hex | undefined {
+  if (!value) return undefined;
+  if (typeof value === 'string') {
+    if (value === '0x' + '0'.repeat(64) || value === '0x0') return undefined;
+    return value as Hex;
+  }
+  if (typeof value === 'bigint') {
+    if (value === 0n) return undefined;
+    return toHex(value, { size: 32 }) as Hex;
+  }
+  return undefined;
+}
+
+function cacheKeyForOwner(owner: Hex | undefined): string | undefined {
+  return owner ? owner.toLowerCase() : undefined;
+}
+
 export function useConfidentialTokenBalance(ownerAddress: Hex | undefined) {
   const { me } = useMe();
+  const builder = useMemo(() => new UserOpBuilder(CHAIN), []);
   const { instance } = useFhevmContext();
   const { ethersSigner, chainId } = useWagmiEthers();
   const { storage: fhevmDecryptionSignatureStorage } = useInMemoryStorage();
+  const [stickyDecryptedValue, setStickyDecryptedValue] = useState<bigint | undefined>(undefined);
+  const [pendingHandleForDecrypt, setPendingHandleForDecrypt] = useState<Hex | undefined>(undefined);
 
   const [serverSignerAddress, setServerSignerAddress] = useState<Hex | undefined>(undefined);
   const [serverSignerError, setServerSignerError] = useState<string | null>(null);
@@ -96,7 +136,7 @@ export function useConfidentialTokenBalance(ownerAddress: Hex | undefined) {
     } as any;
   }, [serverSignerAddress]);
 
-  const decryptionSigner = ethersSigner ?? serverSigner;
+  const decryptionSigner = serverSigner ?? ethersSigner;
   const callerAddress = ownerAddress || (me?.account as Hex | undefined);
 
   const { data: balanceHandle, refetch, isFetching } = useReadContract({
@@ -111,17 +151,10 @@ export function useConfidentialTokenBalance(ownerAddress: Hex | undefined) {
     },
   });
 
+  const usingServerSigner = !!serverSignerAddress;
+
   const handleHex = useMemo(() => {
-    if (!balanceHandle) return undefined;
-    if (typeof balanceHandle === 'string') {
-      if (balanceHandle === '0x' + '0'.repeat(64) || balanceHandle === '0x0') return undefined;
-      return balanceHandle as Hex;
-    }
-    if (typeof balanceHandle === 'bigint') {
-      if (balanceHandle === 0n) return undefined;
-      return toHex(balanceHandle, { size: 32 }) as Hex;
-    }
-    return undefined;
+    return normalizeBalanceHandle(balanceHandle);
   }, [balanceHandle]);
 
   const requests = useMemo(() => {
@@ -146,17 +179,138 @@ export function useConfidentialTokenBalance(ownerAddress: Hex | undefined) {
     return match ? (match[1] as bigint) : undefined;
   }, [handleHex, results]);
 
+  const ownerCacheKey = useMemo(() => cacheKeyForOwner(callerAddress), [callerAddress]);
+
+  useEffect(() => {
+    if (!ownerCacheKey) {
+      setStickyDecryptedValue(undefined);
+      return;
+    }
+
+    setStickyDecryptedValue(runtimeDecryptedBalanceCache.get(ownerCacheKey));
+  }, [ownerCacheKey]);
+
+  useEffect(() => {
+    if (!ownerCacheKey || decryptedValue === undefined) return;
+
+    runtimeDecryptedBalanceCache.set(ownerCacheKey, decryptedValue);
+    setStickyDecryptedValue(decryptedValue);
+  }, [decryptedValue, ownerCacheKey]);
+
+  const effectiveDecryptedValue = decryptedValue ?? stickyDecryptedValue;
+
+  const syncDecryptSignerAcl = useCallback(async () => {
+    if (!usingServerSigner || !serverSignerAddress || !callerAddress) {
+      return;
+    }
+
+    if (!me?.account || !me?.keyId) {
+      throw new Error('Wallet session is not ready for ACL sync. Please re-login and retry.');
+    }
+
+    smartWallet.init();
+
+    const call = {
+      dest: CUSDC_WRAPPER_ADDRESS as Hex,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: WRAPPER_WRITE_ABI,
+        functionName: 'syncBalanceAcl',
+        args: [serverSignerAddress],
+      }),
+    };
+
+    const userOp = await builder.buildUserOp({
+      calls: [call],
+      keyId: me.keyId,
+      sender: me.account as Hex,
+      publicKey: [BigInt(me.pubKey.x), BigInt(me.pubKey.y)],
+    });
+
+    await ensureUserOpPrefund({
+      account: me.account as Hex,
+      userOp,
+    });
+
+    const hash = await smartWallet.sendUserOperation({ userOp });
+    const receipt = await smartWallet.waitForUserOperationReceipt({ hash });
+
+    if (!receipt || receipt.success === false || receipt.receipt?.status !== '0x1') {
+      const rawReason =
+        receipt?.receipt?.revertReason ||
+        receipt?.reason ||
+        receipt?.error ||
+        receipt?.message;
+      const reason = describeExecutionRevertReason(rawReason) || String(rawReason || 'unknown');
+      throw new Error(
+        `Failed to authorize wallet decrypt signer: ${reason}. Ensure wrapper supports syncBalanceAcl(address) and NEXT_PUBLIC_CUSDC_WRAPPER_ADDRESS points to the upgraded deployment.`
+      );
+    }
+  }, [
+    usingServerSigner,
+    serverSignerAddress,
+    callerAddress,
+    me?.account,
+    me?.keyId,
+    me?.pubKey.x,
+    me?.pubKey.y,
+    builder,
+  ]);
+
+  const decryptWithAclSync = useCallback(async () => {
+    setPendingHandleForDecrypt(undefined);
+
+    const firstRead = await refetch();
+
+    if (usingServerSigner) {
+      await syncDecryptSignerAcl();
+    }
+
+    const secondRead = await refetch();
+    const latestHandle =
+      normalizeBalanceHandle(secondRead.data) ??
+      normalizeBalanceHandle(firstRead.data);
+
+    if (!latestHandle) {
+      return;
+    }
+
+    setPendingHandleForDecrypt(latestHandle);
+
+  }, [refetch, syncDecryptSignerAcl, usingServerSigner]);
+
+  useEffect(() => {
+    if (!pendingHandleForDecrypt || !handleHex) {
+      return;
+    }
+
+    if (pendingHandleForDecrypt.toLowerCase() !== handleHex.toLowerCase()) {
+      return;
+    }
+
+    if (!canDecrypt || isDecrypting) {
+      return;
+    }
+
+    setPendingHandleForDecrypt(undefined);
+    decrypt();
+  }, [canDecrypt, decrypt, handleHex, isDecrypting, pendingHandleForDecrypt]);
+
   return {
     handleHex,
-    decryptedValue,
+    decryptedValue: effectiveDecryptedValue,
+    latestDecryptedValue: decryptedValue,
     canDecrypt,
     decrypt,
+    decryptWithAclSync,
+    syncDecryptSignerAcl,
     isDecrypting,
     decryptError: decryptError ? String(decryptError) : null,
     refetch,
     isFetching,
     serverSignerError,
-    decryptionSignerAddress: ethersSigner ? undefined : serverSignerAddress,
+    usingServerSigner,
+    decryptionSignerAddress: usingServerSigner ? serverSignerAddress : undefined,
   };
 }
 
