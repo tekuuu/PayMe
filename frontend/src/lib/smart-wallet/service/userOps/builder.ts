@@ -89,6 +89,7 @@ export class UserOpBuilder {
     }
 
     const { account, publicKey: resolvedPublicKey } = await this._resolveSmartWalletIdentity({
+      keyId,
       sender,
       publicKey,
     });
@@ -119,6 +120,14 @@ export class UserOpBuilder {
       preVerificationGas: "0x0",
     } as any;
 
+    const hasInitCode = initCode !== "0x" && initCode !== "0x0";
+    // WebAuthn signature validation can be significantly under-estimated by some bundlers.
+    // Keep sane floors so validateUserOp does not OOG with AA23.
+    // Decrypt (FHE) & Subscription approvals require massive verification overhead.
+    const MIN_CALL_GAS_LIMIT = hasInitCode ? 500_000n : 350_000n;
+    const MIN_VERIFICATION_GAS_LIMIT = hasInitCode ? 1_800_000n : 1_500_000n;
+    const MIN_PRE_VERIFICATION_GAS = hasInitCode ? 350_000n : 280_000n;
+
     const withCeilMargin = (value: bigint, bps: bigint) => {
       if (value <= 0n) return 0n;
       // ceil(value * (1 + bps/10_000))
@@ -136,7 +145,9 @@ export class UserOpBuilder {
     try {
       // Estimating with empty signature underestimates preVerificationGas for WebAuthn payloads.
       // Use a realistic dummy signature size so final signed UserOps don't get rejected.
-      const dummySignature = (`0x${"11".repeat(900)}`) as Hex;
+      // Relayer user-decrypt/AA expects a specific format for WebAuthn signatures.
+      // Larger dummy to force more room for clientDataJson variability (typical for subscription flows).
+      const dummySignature = (`0x${"11".repeat(2000)}`) as Hex;
       const gasEstimate = await smartWallet.estimateUserOperationGas({
         userOp: {
           ...partialOp,
@@ -148,12 +159,18 @@ export class UserOpBuilder {
       const verification = BigInt(gasEstimate.verificationGasLimit);
       const pre = BigInt(gasEstimate.preVerificationGas);
 
-      // Keep margins moderate; too little fails, too much inflates prefund.
-      const callGasLimit = withCeilMargin(call, 2000n) + 50_000n; // +20% + 50k
-      const verificationGasLimit = withCeilMargin(verification, 2000n) + 100_000n; // +20% + 100k
+      // Keep margins extreme; subscription approvals are high-overhead FHE operations.
+      const callGasLimit = maxBigInt([
+        withCeilMargin(call, 5000n) + 200_000n, // +50% + 200k
+        MIN_CALL_GAS_LIMIT,
+      ]);
+      const verificationGasLimit = maxBigInt([
+        withCeilMargin(verification, 6000n) + 400_000n, // +60% + 400k
+        MIN_VERIFICATION_GAS_LIMIT,
+      ]);
       const preVerificationGas = maxBigInt([
-        withCeilMargin(pre, 3000n) + 15_000n, // +30% + 15k
-        80_000n, // floor for passkey-heavy payloads
+        withCeilMargin(pre, 10_000n) + 100_000n, // +100% + 100k
+        MIN_PRE_VERIFICATION_GAS,
       ]);
 
       return {
@@ -162,26 +179,25 @@ export class UserOpBuilder {
         verificationGasLimit: toHex(verificationGasLimit),
         preVerificationGas: toHex(preVerificationGas),
       };
-    } catch(e) {
-      console.warn("Gas estimation failed, falling back to defaults", e);
-
+    } catch {
       // Moderate defaults (avoid exploding prefund). If these still fail, we'll need a paymaster
       // or a more explicit funding flow.
       return {
         ...partialOp,
-        callGasLimit: toHex(1_500_000n),
-        verificationGasLimit: toHex(1_500_000n),
-        preVerificationGas: toHex(350_000n),
+        callGasLimit: toHex(1_300_000n),
+        verificationGasLimit: toHex(1_800_000n),
+        preVerificationGas: toHex(650_000n),
       };
     }
   }
 
   async getSenderAddress(keyId: Hex): Promise<Hex> {
-    const { account } = await this._resolveSmartWalletIdentity({});
+    const { account } = await this._resolveSmartWalletIdentity({ keyId });
     return account;
   }
 
   private async _resolveSmartWalletIdentity(input: {
+    keyId?: Hex;
     sender?: Hex;
     publicKey?: [bigint, bigint];
   }): Promise<{ account: Hex; publicKey: [bigint, bigint] }> {
@@ -189,16 +205,37 @@ export class UserOpBuilder {
       return { account: input.sender, publicKey: input.publicKey };
     }
 
+    const keyIdLower = input.keyId?.toLowerCase();
     const meStr = localStorage.getItem("passkeys4337.me");
-    if (!meStr) {
-      throw new Error("User session not found in localStorage");
+    if (meStr) {
+      try {
+        const me = JSON.parse(meStr) as {
+          keyId?: Hex;
+          account?: Hex;
+          pubKey?: { x: Hex; y: Hex };
+        };
+        const meKeyMatches = !keyIdLower || me.keyId?.toLowerCase() === keyIdLower;
+        if (meKeyMatches && me.account && me.pubKey?.x && me.pubKey?.y) {
+          return {
+            account: me.account,
+            publicKey: [BigInt(me.pubKey.x), BigInt(me.pubKey.y)],
+          };
+        }
+      } catch {
+        // ignore malformed session payload and continue with on-chain lookup
+      }
     }
-    
-    const me = JSON.parse(meStr);
-    const publicKey: [bigint, bigint] = [BigInt(me.pubKey.x), BigInt(me.pubKey.y)];
-    const account = me.account as Hex;
-    
-    return { account, publicKey };
+
+    if (input.keyId) {
+      const { getUser } = await import("@/lib/factory/getUser");
+      const user = await getUser(input.keyId);
+      return {
+        account: user.account as Hex,
+        publicKey: [BigInt(user.pubKey.x), BigInt(user.pubKey.y)],
+      };
+    }
+
+    throw new Error("User session not found in localStorage");
   }
 
   private async _createInitCode(publicKey: [bigint, bigint]): Promise<{ initCode: Hex }> {

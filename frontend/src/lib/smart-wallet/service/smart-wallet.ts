@@ -150,6 +150,10 @@ class SmartWallet {
     const challengePos = clientDataJSON.indexOf('"challenge":"');
     const typePos = clientDataJSON.indexOf('"type":"webauthn.get"');
 
+    if (challengePos === -1 || typePos === -1) {
+      throw new Error("Invalid clientDataJSON: missing challenge or type");
+    }
+
     return encodePacked(
       ["uint8", "uint48", "bytes"],
       [
@@ -174,6 +178,8 @@ class SmartWallet {
             {
               authenticatorData: credentials.authenticatorData as Hex,
               clientDataJSON: clientDataJSON,
+              // WebAuthn.sol checks for the full `"challenge":"<base64url>"` property,
+              // so this index must point at the property start, not the value start.
               challengeLocation: BigInt(challengePos),
               responseTypeLocation: BigInt(typePos),
               r: BigInt(credentials.signature.r),
