@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { Address, Hex, encodeFunctionData, isAddress, zeroAddress } from "viem";
+import { Address, Hex, encodeFunctionData, isAddress, toHex, zeroAddress } from "viem";
 import { WebAuthn } from "@/lib/web-authn/web-authn";
 import { saveUser } from "@/lib/factory";
 import { getUser } from "@/lib/factory/getUser";
@@ -17,6 +17,8 @@ import {
 } from "@/config/constants";
 import { smartWallet } from "@/lib/smart-wallet";
 import { UserOpBuilder } from "@/lib/smart-wallet/service/userOps";
+import { ensureUserOpPrefund } from "@/lib/smart-wallet/service/userOps/prefund";
+import type { UserOperationAsHex } from "@/lib/smart-wallet/service/userOps/types";
 import { toast } from "sonner";
 
 export type AccountType = "personal" | "business";
@@ -77,6 +79,49 @@ function accountTypeToRoleMask(accountType: AccountType) {
   return accountType === "business" ? ACCOUNT_ROLE_MERCHANT : ACCOUNT_ROLE_PERSONAL;
 }
 
+function isValidSmartAccountAddress(addressLike?: string): addressLike is Address {
+  return !!addressLike && isAddress(addressLike) && addressLike !== zeroAddress;
+}
+
+function isNonZeroHex32(value?: string): value is Hex {
+  return !!value && /^0x[0-9a-fA-F]{64}$/.test(value) && value !== "0x0000000000000000000000000000000000000000000000000000000000000000";
+}
+
+function minBigInt(values: bigint[]) {
+  let best = values[0] ?? 0n;
+  for (const value of values) {
+    if (value < best) best = value;
+  }
+  return best;
+}
+
+function tuneRoleRegistrationUserOpGas(userOp: UserOperationAsHex): UserOperationAsHex {
+  const call = BigInt(userOp.callGasLimit);
+  const verification = BigInt(userOp.verificationGasLimit);
+  const pre = BigInt(userOp.preVerificationGas);
+
+  // Role registration is lightweight compared to private card/FHE operations.
+  // Keep these sane to avoid unnecessary large prefund top-ups on first login.
+  return {
+    ...userOp,
+    callGasLimit: toHex(minBigInt([call, 280_000n])),
+    verificationGasLimit: toHex(minBigInt([verification, 850_000n])),
+    preVerificationGas: toHex(minBigInt([pre, 170_000n])),
+  };
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    });
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 async function getOnChainAccountType(account?: string): Promise<AccountType | null> {
   if (!account || !isAddress(account) || ACCOUNT_REGISTRY_ADDRESS === zeroAddress) {
     return null;
@@ -115,19 +160,6 @@ async function setOnChainAccountType(input: {
 
   const roleMask = accountTypeToRoleMask(input.accountType);
 
-  const waitForBalance = async (opts: { address: Address; minWei: bigint; timeoutMs: number }) => {
-    const start = Date.now();
-    while (Date.now() - start < opts.timeoutMs) {
-      try {
-        const bal = await PUBLIC_CLIENT.getBalance({ address: opts.address });
-        if (bal >= opts.minWei) return;
-      } catch {
-        // ignore transient RPC errors
-      }
-      await new Promise((r) => setTimeout(r, 1500));
-    }
-  };
-
   smartWallet.init();
   const builder = new UserOpBuilder(CHAIN);
   const call = {
@@ -140,26 +172,58 @@ async function setOnChainAccountType(input: {
     }),
   };
 
-  // Fresh wallets are funded asynchronously by the backend. If we submit too fast,
-  // bundler simulation can fail with AA21 (prefund). We wait briefly and retry.
-  await waitForBalance({ address: input.account, minWei: 1n, timeoutMs: 15_000 });
-
   let lastErr: any = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const userOp = await builder.buildUserOp({
+      const baseUserOp = await builder.buildUserOp({
         calls: [call],
         keyId: input.keyId,
         sender: input.account as Hex,
         publicKey: [BigInt(input.pubKey.x), BigInt(input.pubKey.y)],
       });
 
-      const hash = await smartWallet.sendUserOperation({ userOp });
-      const receipt = await smartWallet.waitForUserOperationReceipt({ hash });
-      if (!receipt || receipt.success === false || receipt.receipt?.status !== "0x1") {
-        throw new Error("Failed to register account role on-chain.");
+      const reducedUserOp = tuneRoleRegistrationUserOpGas(baseUserOp);
+      const hasReducedGas =
+        reducedUserOp.callGasLimit !== baseUserOp.callGasLimit ||
+        reducedUserOp.verificationGasLimit !== baseUserOp.verificationGasLimit ||
+        reducedUserOp.preVerificationGas !== baseUserOp.preVerificationGas;
+
+      const candidateUserOps = hasReducedGas ? [reducedUserOp, baseUserOp] : [baseUserOp];
+
+      for (let idx = 0; idx < candidateUserOps.length; idx++) {
+        const candidate = candidateUserOps[idx];
+        try {
+          // Ensure accounts hold enough ETH for validateUserOp prefund.
+          await ensureUserOpPrefund({
+            account: input.account as Hex,
+            userOp: candidate,
+          });
+
+          const hash = await smartWallet.sendUserOperation({ userOp: candidate });
+          const receipt = await withTimeout(
+            smartWallet.waitForUserOperationReceipt({ hash }),
+            90_000,
+            "Timed out while confirming account role registration. Please try login again."
+          );
+          if (!receipt || receipt.success === false || receipt.receipt?.status !== "0x1") {
+            throw new Error("Failed to register account role on-chain.");
+          }
+          return;
+        } catch (candidateErr: any) {
+          const message = String(candidateErr?.message || "").toLowerCase();
+          const isGasTooTight =
+            message.includes("aa40") ||
+            message.includes("aa23") ||
+            message.includes("over verificationgaslimit");
+
+          // If reduced gas was too tight, retry once with base builder gas in the same attempt.
+          if (idx === 0 && candidateUserOps.length > 1 && isGasTooTight) {
+            continue;
+          }
+
+          throw candidateErr;
+        }
       }
-      return;
     } catch (e: any) {
       lastErr = e;
       const message = String(e?.message || "");
@@ -256,23 +320,59 @@ function useMeHook() {
       }
       const user = await getUser(credential.rawId);
 
-      let accountType = await getOnChainAccountType(user?.account);
+      const pending = loadPendingRoleRegistration();
+      const pendingKeyMatches =
+        pending &&
+        pending.keyId.toLowerCase() === credential.rawId.toLowerCase();
+
+      let resolvedAccount: Address = (user?.account || zeroAddress) as Address;
+      let resolvedPubKey: { x: Hex; y: Hex } = user?.pubKey || { x: "0x0", y: "0x0" };
+
+      // Recovery path: if user lookup returns an empty record, prefer pending registration data.
+      if (!isValidSmartAccountAddress(resolvedAccount) && pendingKeyMatches) {
+        resolvedAccount = pending!.account;
+        resolvedPubKey = pending!.pubKey;
+      }
+
+      // Deterministic recovery path from passkey public key.
+      if (
+        !isValidSmartAccountAddress(resolvedAccount) &&
+        isNonZeroHex32(resolvedPubKey?.x) &&
+        isNonZeroHex32(resolvedPubKey?.y)
+      ) {
+        try {
+          const { getAddress } = await import("@/lib/factory/getAddress");
+          const derived = await getAddress(resolvedPubKey);
+          if (isValidSmartAccountAddress(derived)) {
+            resolvedAccount = derived;
+          }
+        } catch {
+          // Ignore derivation failures and surface a clear auth error below.
+        }
+      }
+
+      if (!isValidSmartAccountAddress(resolvedAccount)) {
+        throw new Error(
+          "No smart wallet found for this passkey. If this is your first login on this device, create wallet first."
+        );
+      }
+
+      let accountType = await getOnChainAccountType(resolvedAccount);
       if (!accountType) {
-        const pending = loadPendingRoleRegistration();
         const pendingMatchesWallet =
-          pending &&
+          !!pending &&
           pending.keyId.toLowerCase() === credential.rawId.toLowerCase() &&
-          pending.account.toLowerCase() === (user?.account || zeroAddress).toLowerCase();
+          pending.account.toLowerCase() === resolvedAccount.toLowerCase();
         const recoveryType = accountTypeHint || (pendingMatchesWallet ? pending.accountType : undefined);
 
         if (recoveryType) {
           await setOnChainAccountType({
             keyId: credential.rawId,
-            account: (user?.account || zeroAddress) as Address,
-            pubKey: user?.pubKey || { x: "0x0", y: "0x0" },
+            account: resolvedAccount,
+            pubKey: resolvedPubKey,
             accountType: recoveryType,
           });
-          accountType = await getOnChainAccountType(user?.account);
+          accountType = await getOnChainAccountType(resolvedAccount);
           if (accountType) {
             clearPendingRoleRegistration();
           }
@@ -286,14 +386,10 @@ function useMeHook() {
 
       const me = {
         keyId: credential.rawId,
-        pubKey: user?.pubKey || { x: "0x0", y: "0x0" }, // We don't have pubkey from get(), it comes from contract
-        account: user?.account || zeroAddress,
+        pubKey: resolvedPubKey,
+        account: resolvedAccount,
         accountType,
       };
-
-      if (me.account === zeroAddress) {
-        throw new Error("user not found");
-      }
 
       localStorage.setItem("passkeys4337.me", JSON.stringify(me));
       localStorage.setItem("passkeys4337.returning", "true");

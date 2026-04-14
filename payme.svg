@@ -1,0 +1,22 @@
+<svg width="500" height="500" viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg">
+  <path d="M370 100 A 180 180 0 1 0 370 400" 
+        fill="none" 
+        stroke="black" 
+        stroke-width="30" 
+        stroke-linecap="round"/>
+
+  <rect x="120" y="150" width="340" height="200" rx="40" ry="40" fill="#26A4B5" />
+
+  <text x="285" y="265" 
+        font-family="Arial, sans-serif" 
+        font-weight="bold" 
+        font-size="65" 
+        fill="white" 
+        text-anchor="middle">payme</text>
+
+  <path d="M410 210 H 470 Q 490 210 490 250 Q 490 290 470 290 H 410 Q 380 290 380 250 Q 380 210 410 210 Z" 
+        fill="#F4B44A" />
+
+  <circle cx="425" cy="250" r="18" fill="#5E66F1" />
+</svg>
+
