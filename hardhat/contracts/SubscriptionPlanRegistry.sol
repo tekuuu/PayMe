@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 pragma solidity ^0.8.24;
 
-import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
-
 /// @title SubscriptionPlanRegistry
 /// @notice Privacy-first plan registry:
 /// - Stores only opaque identifiers and hashes on-chain.
 /// - Human-readable merchant/plan details stay off-chain.
-contract SubscriptionPlanRegistry is ZamaEthereumConfig {
+/// @dev This contract intentionally uses plain Solidity types.
+/// Confidential values (customer balances, allowances, spend tracking) are handled in PrivateCard via euint64.
+/// Plan templates are merchant-level metadata, not per-customer confidential state.
+contract SubscriptionPlanRegistry {
     struct PlanRecord {
         address merchant;
         uint64 periodSeconds;
+        // Intentionally plaintext to make merchant checkout verification and UX straightforward.
+        // If needed in future, this can be replaced with a commitment/hash-based model.
         uint256 priceMicros;
         bytes32 termsHash;
         bool active;
@@ -108,4 +111,3 @@ contract SubscriptionPlanRegistry is ZamaEthereumConfig {
         return _merchantPlanRefs[merchant];
     }
 }
-

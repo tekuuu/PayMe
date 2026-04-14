@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 pragma solidity ^0.8.24;
 
-import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
-
 /// @title AccountRegistry
 /// @notice On-chain source of truth for account roles.
 /// @dev Bitmask roles:
 /// - 1: personal
 /// - 2: merchant/business
 /// - 3: both
-contract AccountRegistry is ZamaEthereumConfig {
+contract AccountRegistry {
     uint8 public constant ROLE_PERSONAL = 1;
     uint8 public constant ROLE_MERCHANT = 2;
     uint8 public constant ROLE_BOTH = 3;
@@ -49,4 +47,3 @@ contract AccountRegistry is ZamaEthereumConfig {
         emit RoleSet(account, roleMask);
     }
 }
-
