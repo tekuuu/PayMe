@@ -112,8 +112,16 @@ export function NavUser({
                   </p>
                   <div className='flex flex-col space-y-1 mt-2 pt-2 border-t border-border'>
                     <div className='flex justify-between items-center text-xs'>
-                      <span className='text-muted-foreground'>ETH</span>
+                      <span className='text-muted-foreground'>ETH (total)</span>
                       <span className='font-medium'>{balances.eth.formatted}</span>
+                    </div>
+                    <div className='flex justify-between items-center text-xs'>
+                      <span className='text-muted-foreground'>Wallet ETH</span>
+                      <span className='font-medium'>{balances.eth.walletFormatted}</span>
+                    </div>
+                    <div className='flex justify-between items-center text-xs'>
+                      <span className='text-muted-foreground'>AA Deposit</span>
+                      <span className='font-medium'>{balances.eth.depositFormatted}</span>
                     </div>
                     <div className='flex justify-between items-center text-xs'>
                       <span className='text-muted-foreground'>USDC</span>

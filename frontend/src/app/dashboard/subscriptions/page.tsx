@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { encodeFunctionData, Hex, parseUnits, toHex } from 'viem';
+import { encodeFunctionData, getAddress, Hex, parseUnits, toHex } from 'viem';
 import { Loader2, ShieldCheck, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import PageContainer from '@/components/layout/page-container';
@@ -16,8 +16,9 @@ import { SubscriptionStatusBadge } from '@/components/merchant/status-badge';
 import { useMe } from '@/providers/auth-provider';
 import { useFhevmContext } from '@/providers/fhevm-provider';
 import { usePrivateCard } from '@/hooks/use-private-card';
-import { CHAIN, PRIVATE_CARD_ABI } from '@/config/constants';
+import { CHAIN, PRIVATE_CARD_ABI, PUBLIC_CLIENT } from '@/config/constants';
 import { smartWallet } from '@/lib/smart-wallet';
+import { describeExecutionRevertReason } from '@/lib/smart-wallet/revert-decode';
 import { UserOpBuilder } from '@/lib/smart-wallet/service/userOps';
 import {
   MERCHANT_CONTROL_PLANE_EVENT,
@@ -50,6 +51,21 @@ type MySubscriptionRow = {
   amountRefMicros: string;
   maxAllowanceRefMicros: string;
 };
+
+function formatUserOpExecutionError(receipt: any, fallback: string) {
+  const rawReason =
+    receipt?.receipt?.revertReason ||
+    receipt?.reason ||
+    receipt?.error ||
+    receipt?.message;
+  const reason = describeExecutionRevertReason(rawReason);
+
+  if (reason && String(reason).trim().length > 0) {
+    return `${fallback} Reason: ${String(reason)}`;
+  }
+
+  return fallback;
+}
 
 export default function SubscriptionsPage() {
   const { me } = useMe();
@@ -143,10 +159,19 @@ export default function SubscriptionsPage() {
     if (!selectedCardAddress) throw new Error('No private card selected');
     if (!instance) throw new Error('Crypto engine not ready');
 
+    const cardOwner = (await PUBLIC_CLIENT.readContract({
+      address: selectedCardAddress as Hex,
+      abi: PRIVATE_CARD_ABI,
+      functionName: 'owner',
+    })) as Hex;
+
+    const signingAccount = getAddress(cardOwner) as Hex;
+
     const amountRaw = BigInt(args.maxPerPeriodMicros);
-    const encryptedInput = instance.createEncryptedInput(selectedCardAddress, me.account as Hex);
+    const encryptedInput = instance.createEncryptedInput(selectedCardAddress, signingAccount);
     encryptedInput.add64(amountRaw);
-    const { handles } = await encryptedInput.encrypt();
+    const { handles, inputProof } = await encryptedInput.encrypt();
+    const inputProofHex = `0x${Array.from(inputProof).map((byte) => byte.toString(16).padStart(2, '0')).join('')}` as Hex;
 
     smartWallet.init();
     const call = {
@@ -154,12 +179,13 @@ export default function SubscriptionsPage() {
       value: 0n,
       data: encodeFunctionData({
         abi: PRIVATE_CARD_ABI,
-        functionName: 'approveSubscriptionRef',
+        functionName: 'approveSubscriptionRefWithProof',
         args: [
           args.merchantAddress,
           args.planRef,
           args.subscriptionRef,
-          BigInt(toHex(handles[0])),
+          toHex(handles[0], { size: 32 }),
+          inputProofHex,
           BigInt(args.periodSeconds),
         ],
       }),
@@ -168,38 +194,123 @@ export default function SubscriptionsPage() {
     const userOp = await builder.buildUserOp({
       calls: [call],
       keyId: me.keyId,
+      sender: signingAccount,
+      publicKey: [BigInt(me.pubKey.x), BigInt(me.pubKey.y)],
     });
 
     const hash = await smartWallet.sendUserOperation({ userOp });
     const receipt = await smartWallet.waitForUserOperationReceipt({ hash });
     if (!receipt || receipt.success === false || receipt.receipt?.status !== '0x1') {
-      throw new Error('On-chain approval failed');
+      throw new Error(formatUserOpExecutionError(receipt, 'On-chain approval failed'));
     }
 
     return toHex(handles[0], { size: 32 });
   };
 
   const handleCancelAtPeriodEnd = (row: MySubscriptionRow, enabled: boolean) => {
-    setSubscriptionCancelAtPeriodEnd(row.merchantAddress, row.subscriptionId, enabled);
-    toast.success(enabled ? 'Cancellation scheduled' : 'Cancellation removed');
+    if (!row.subscriptionRef) {
+      toast.error('Missing subscription reference, please resubscribe from checkout link');
+      return;
+    }
+
+    const run = async () => {
+      if (!me) throw new Error('Please login first');
+      if (!selectedCardAddress) throw new Error('No private card selected');
+
+      const cardOwner = (await PUBLIC_CLIENT.readContract({
+        address: selectedCardAddress as Hex,
+        abi: PRIVATE_CARD_ABI,
+        functionName: 'owner',
+      })) as Hex;
+
+      const signingAccount = getAddress(cardOwner) as Hex;
+
+      smartWallet.init();
+      const call = {
+        dest: selectedCardAddress as Hex,
+        value: 0n,
+        data: encodeFunctionData({
+          abi: PRIVATE_CARD_ABI,
+          functionName: 'setSubscriptionRefCancelAtPeriodEnd',
+          args: [row.subscriptionRef as Hex, enabled],
+        }),
+      };
+
+      const userOp = await builder.buildUserOp({
+        calls: [call],
+        keyId: me.keyId,
+        sender: signingAccount,
+        publicKey: [BigInt(me.pubKey.x), BigInt(me.pubKey.y)],
+      });
+
+      const hash = await smartWallet.sendUserOperation({ userOp });
+      const receipt = await smartWallet.waitForUserOperationReceipt({ hash });
+      if (!receipt || receipt.success === false || receipt.receipt?.status !== '0x1') {
+        throw new Error(formatUserOpExecutionError(receipt, 'Failed to update cancellation schedule'));
+      }
+    };
+
+    const commit = async () => {
+      try {
+        setIsSubmitting(true);
+        await run();
+        setSubscriptionCancelAtPeriodEnd(row.merchantAddress, row.subscriptionId, enabled);
+        toast.success(enabled ? 'Cancellation scheduled' : 'Cancellation removed');
+      } catch (e: any) {
+        toast.error(e?.message || 'Failed to update cancellation schedule');
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
+
+    void commit();
   };
 
   const handleCancelNow = async (row: MySubscriptionRow) => {
-    if (!row.subscriptionRef || !row.planRef) {
+    if (!row.subscriptionRef) {
       toast.error('Missing opaque subscription reference, please resubscribe from checkout link');
       return;
     }
     try {
       setIsSubmitting(true);
-      await approveOnChain({
-        merchantAddress: row.merchantAddress,
-        planRef: row.planRef,
-        subscriptionRef: row.subscriptionRef,
-        maxPerPeriodMicros: '0',
-        periodSeconds: row.periodSeconds,
+
+      if (!me) throw new Error('Please login first');
+      if (!selectedCardAddress) throw new Error('No private card selected');
+
+      const cardOwner = (await PUBLIC_CLIENT.readContract({
+        address: selectedCardAddress as Hex,
+        abi: PRIVATE_CARD_ABI,
+        functionName: 'owner',
+      })) as Hex;
+
+      const signingAccount = getAddress(cardOwner) as Hex;
+
+      smartWallet.init();
+      const call = {
+        dest: selectedCardAddress as Hex,
+        value: 0n,
+        data: encodeFunctionData({
+          abi: PRIVATE_CARD_ABI,
+          functionName: 'cancelSubscriptionRef',
+          args: [row.subscriptionRef as Hex],
+        }),
+      };
+
+      const userOp = await builder.buildUserOp({
+        calls: [call],
+        keyId: me.keyId,
+        sender: signingAccount,
+        publicKey: [BigInt(me.pubKey.x), BigInt(me.pubKey.y)],
       });
+
+      const hash = await smartWallet.sendUserOperation({ userOp });
+      const receipt = await smartWallet.waitForUserOperationReceipt({ hash });
+      if (!receipt || receipt.success === false || receipt.receipt?.status !== '0x1') {
+        throw new Error(formatUserOpExecutionError(receipt, 'On-chain cancellation failed'));
+      }
+
       cancelSubscription(row.merchantAddress, row.subscriptionId, false);
-      toast.success('Canceled (on-chain allowance set to 0)');
+      toast.success('Canceled on-chain');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to cancel');
     } finally {

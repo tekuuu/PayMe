@@ -42,11 +42,22 @@ export async function POST(req: Request) {
       value: topUpAmount,
     });
 
+    // Wait for funding to be mined before returning, otherwise the next
+    // UserOperation simulation can still fail with AA21 (prefund not visible yet).
+    await PUBLIC_CLIENT.waitForTransactionReceipt({
+      hash: txHash,
+      confirmations: 1,
+      timeout: 120_000,
+    });
+
+    const balanceAfter = await PUBLIC_CLIENT.getBalance({ address: account });
+
     return Response.json({
       toppedUp: true,
       txHash,
       amount: topUpAmount.toString(),
       balanceBefore: balanceBefore.toString(),
+      balanceAfter: balanceAfter.toString(),
     });
   } catch (error: any) {
     return Response.json({ error: error?.message || "Top-up failed" }, { status: 500 });

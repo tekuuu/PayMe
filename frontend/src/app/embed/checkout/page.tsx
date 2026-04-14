@@ -2,14 +2,15 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { CHAIN, PRIVATE_CARD_ABI } from '@/config/constants';
+import { CHAIN, PRIVATE_CARD_ABI, PUBLIC_CLIENT } from '@/config/constants';
 import { useFhevmContext } from '@/providers/fhevm-provider';
 import { useMe } from '@/providers/auth-provider';
 import { usePrivateCard } from '@/hooks/use-private-card';
 import { smartWallet } from '@/lib/smart-wallet';
+import { describeExecutionRevertReason } from '@/lib/smart-wallet/revert-decode';
 import { UserOpBuilder } from '@/lib/smart-wallet/service/userOps';
 import { registerSubscriptionApproval } from '@/lib/merchant/control-plane-store';
-import { encodeFunctionData, Hex, isAddress, keccak256, parseUnits, stringToHex, toHex } from 'viem';
+import { encodeFunctionData, getAddress, Hex, isAddress, keccak256, parseUnits, stringToHex, toHex } from 'viem';
 
 type SubscriptionPayload = {
   merchantAddress?: string;
@@ -41,6 +42,21 @@ function randomRef(seed: string) {
     // fallback below
   }
   return keccak256(stringToHex(`${seed}|${Date.now()}|${Math.random()}`)) as Hex;
+}
+
+function formatUserOpExecutionError(receipt: any, fallback: string) {
+  const rawReason =
+    receipt?.receipt?.revertReason ||
+    receipt?.reason ||
+    receipt?.error ||
+    receipt?.message;
+  const reason = describeExecutionRevertReason(rawReason);
+
+  if (reason && String(reason).trim().length > 0) {
+    return `${fallback} Reason: ${String(reason)}`;
+  }
+
+  return fallback;
 }
 
 export default function EmbedCheckoutPage() {
@@ -180,12 +196,21 @@ export default function EmbedCheckoutPage() {
         return;
       }
 
+      const cardOwner = (await PUBLIC_CLIENT.readContract({
+        address: cardAddress as Hex,
+        abi: PRIVATE_CARD_ABI,
+        functionName: 'owner',
+      })) as Hex;
+
+      const signingAccount = getAddress(cardOwner) as Hex;
+
       try {
         setStatus('Preparing encrypted approval...');
 
-        const encryptedInput = instance.createEncryptedInput(cardAddress, me.account as Hex);
+        const encryptedInput = instance.createEncryptedInput(cardAddress, signingAccount);
         encryptedInput.add64(amountRaw);
-        const { handles } = await encryptedInput.encrypt();
+        const { handles, inputProof } = await encryptedInput.encrypt();
+        const inputProofHex = `0x${Array.from(inputProof).map((byte) => byte.toString(16).padStart(2, '0')).join('')}` as Hex;
         const planRef = randomRef(`plan:${merchant}:${amountRaw.toString()}:${periodSeconds.toString()}`);
         const subscriptionRef = randomRef(`sub:${merchant}:${cardAddress}:${planRef}`);
 
@@ -197,14 +222,16 @@ export default function EmbedCheckoutPage() {
           value: 0n,
           data: encodeFunctionData({
             abi: PRIVATE_CARD_ABI,
-            functionName: 'approveSubscriptionRef',
-            args: [merchant as Hex, planRef, subscriptionRef, BigInt(toHex(handles[0])), periodSeconds],
+            functionName: 'subscribeAndChargeRefWithProof',
+            args: [merchant as Hex, planRef, subscriptionRef, toHex(handles[0], { size: 32 }), inputProofHex, periodSeconds],
           }),
         };
 
         const userOp = await builder.buildUserOp({
           calls: [call],
           keyId: me.keyId,
+          sender: signingAccount,
+          publicKey: [BigInt(me.pubKey.x), BigInt(me.pubKey.y)],
         });
 
         setStatus('Awaiting passkey signature...');
@@ -219,21 +246,22 @@ export default function EmbedCheckoutPage() {
         const receipt = await smartWallet.waitForUserOperationReceipt({ hash });
 
         if (!receipt || receipt.success === false || receipt.receipt?.status !== '0x1') {
-          throw new Error('Subscription approval reverted during execution.');
+          throw new Error(formatUserOpExecutionError(receipt, 'Subscription approval reverted during execution.'));
         }
 
         const txHash = (receipt.receipt?.transactionHash as string | undefined) ?? hash;
         registerSubscriptionApproval({
           merchantAddress: merchant as Hex,
           customerCardAddress: cardAddress,
-          customerSmartWallet: me.account,
+          customerSmartWallet: signingAccount,
           planRef,
           subscriptionRef,
           amountRef: amountRaw.toString(),
           periodSeconds: Number(periodSeconds),
+          activateImmediately: true,
         });
 
-        setStatus('Success: subscription approved');
+        setStatus('Success: subscription activated');
         postToParent({
           type: 'SUBSCRIPTION_SUCCESS',
           receipt: {
