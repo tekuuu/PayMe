@@ -6,8 +6,8 @@ import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 
 export const metadata: Metadata = {
-  title: 'PayMe Private Card',
-  description: 'Private Card system on Zama FHEVM',
+  title: 'PayMe Dashboard',
+  description: 'Private wallet dashboard on Zama FHEVM',
   robots: {
     index: false,
     follow: false

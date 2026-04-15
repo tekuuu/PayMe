@@ -14,7 +14,7 @@ export default function Page() {
         <div className='mb-10 flex items-center justify-between'>
           <div className='text-lg font-bold tracking-tight text-foreground'>PayMe</div>
           <Link
-            href='/dashboard/payments'
+            href='/dashboard'
             className='inline-flex items-center rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-transform hover:translate-y-[-1px]'
           >
             Open app

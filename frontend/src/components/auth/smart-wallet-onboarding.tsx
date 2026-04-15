@@ -42,7 +42,7 @@ export default function SmartWalletOnboarding({
                 if (created.accountType === 'business') {
                     router.push('/merchant');
                 } else {
-                    router.push('/dashboard/my-card');
+                    router.push('/dashboard');
                 }
             } catch (err) {
                 console.error("Create failed", err);
@@ -61,7 +61,7 @@ export default function SmartWalletOnboarding({
             if (loggedIn.accountType === 'business') {
                 router.push('/merchant');
             } else {
-                router.push('/dashboard/my-card');
+                router.push('/dashboard');
             }
         } catch (err) {
             console.error("Login failed", err);

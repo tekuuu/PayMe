@@ -2,6 +2,14 @@ import { NavItem } from '@/types';
 
 export const personalNavItems: NavItem[] = [
   {
+    title: 'Dashboard',
+    url: '/dashboard',
+    icon: 'dashboard',
+    isActive: false,
+    shortcut: ['d', 'd'],
+    items: []
+  },
+  {
     title: 'My Card',
     url: '/dashboard/my-card',
     icon: 'card',
@@ -9,14 +17,7 @@ export const personalNavItems: NavItem[] = [
     shortcut: ['m', 'c'],
     items: []
   },
-  {
-    title: 'Payments',
-    url: '/dashboard/payments',
-    icon: 'send',
-    isActive: false,
-    shortcut: ['p', 'p'],
-    items: []
-  },
+
   {
     title: 'Subscriptions',
     url: '/dashboard/subscriptions',
@@ -37,19 +38,19 @@ export const personalNavItems: NavItem[] = [
 
 export const merchantNavItems: NavItem[] = [
   {
-    title: 'Overview',
-    url: '/merchant',
+    title: 'Dashboard',
+    url: '/dashboard',
     icon: 'dashboard',
     isActive: false,
-    shortcut: ['m', 'd'],
+    shortcut: ['d', 'b'],
     items: []
   },
   {
-    title: 'Plans',
-    url: '/merchant/plans',
-    icon: 'workspace',
+    title: 'My Card',
+    url: '/dashboard/my-card',
+    icon: 'card',
     isActive: false,
-    shortcut: ['m', 'p'],
+    shortcut: ['m', 'c'],
     items: []
   },
   {
