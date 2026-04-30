@@ -1,12 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { CHAIN, ENTRYPOINT_ADDRESS } from '@/config/constants';
 import { useTokenBalances } from '@/hooks/use-token-balances';
 import { smartWallet } from '@/lib/smart-wallet';
 import { emptyHex, UserOpBuilder } from '@/lib/smart-wallet/service/userOps';
 import { ensureUserOpPrefund } from '@/lib/smart-wallet/service/userOps/prefund';
-import { UserOperationAsHex } from '@/lib/smart-wallet/service/userOps/types';
 import { Me } from '@/providers/auth-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,7 +20,7 @@ import {
 } from '@/components/ui/select';
 import { AlertCircle, Send, CheckCircle2 } from 'lucide-react';
 import { IconCoins, IconWallet, IconHistory } from '@tabler/icons-react';
-import { encodeFunctionData, Hex, isAddress, parseEther, parseUnits, toHex, zeroAddress } from 'viem';
+import { encodeFunctionData, Hex, isAddress, parseEther, parseUnits, zeroAddress } from 'viem';
 import { toast } from 'sonner';
 
 type RecentRecipient = {
@@ -88,39 +87,6 @@ function formatBalanceDisplay(raw: bigint | undefined, decimals: number): string
   return fractionStr ? `${whole.toString()}.${fractionStr}` : whole.toString();
 }
 
-function minBigInt(values: bigint[]) {
-  let best = values[0] ?? 0n;
-  for (const value of values) {
-    if (value < best) best = value;
-  }
-  return best;
-}
-
-function tuneTransferUserOpGas(userOp: UserOperationAsHex): UserOperationAsHex {
-  const call = BigInt(userOp.callGasLimit);
-  const verification = BigInt(userOp.verificationGasLimit);
-  const pre = BigInt(userOp.preVerificationGas);
-
-  // Simple transfer flows do not need the heavy FHE/subscription gas profile.
-  return {
-    ...userOp,
-    callGasLimit: toHex(minBigInt([call, 240_000n])),
-    verificationGasLimit: toHex(minBigInt([verification, 700_000n])),
-    preVerificationGas: toHex(minBigInt([pre, 120_000n])),
-  };
-}
-
-function isGasTooTightError(error: unknown): boolean {
-  const message = String((error as any)?.message || '').toLowerCase();
-  return (
-    message.includes('aa40') ||
-    message.includes('aa23') ||
-    message.includes('over verificationgaslimit') ||
-    message.includes('preverificationgas is not enough') ||
-    message.includes('reverted (or oog)')
-  );
-}
-
 export function SendTokenCard({ me }: { me: Me }) {
   const balances = useTokenBalances(me.account);
   const builder = useMemo(() => new UserOpBuilder(CHAIN), []);
@@ -141,6 +107,7 @@ export function SendTokenCard({ me }: { me: Me }) {
         try {
           setRecentRecipients(JSON.parse(saved));
         } catch (e) {
+          // eslint-disable-next-line no-console
           console.error('Failed to parse recent recipients', e);
         }
       }
@@ -172,7 +139,7 @@ export function SendTokenCard({ me }: { me: Me }) {
   const selectedBalanceLabel = formatBalanceDisplay(selectedBalanceRaw, selectedToken.decimals);
   const ethBalanceRaw = walletEthBalanceRaw;
 
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setSuccessTxHash(null);
@@ -209,20 +176,6 @@ export function SendTokenCard({ me }: { me: Me }) {
     try {
       setIsSubmitting(true);
       smartWallet.init();
-
-      let maxFeePerGas: bigint;
-      let maxPriorityFeePerGas: bigint;
-      try {
-        const gasPrice = await smartWallet.client.request({
-          method: 'pimlico_getUserOperationGasPrice' as never
-        } as never);
-        maxFeePerGas = BigInt((gasPrice as any).fast.maxFeePerGas);
-        maxPriorityFeePerGas = BigInt((gasPrice as any).fast.maxPriorityFeePerGas);
-      } catch {
-        const fees = await smartWallet.client.estimateFeesPerGas();
-        maxFeePerGas = fees.maxFeePerGas || 0n;
-        maxPriorityFeePerGas = fees.maxPriorityFeePerGas || 0n;
-      }
 
       const transferCall =
         selectedToken.address === null
@@ -263,53 +216,24 @@ export function SendTokenCard({ me }: { me: Me }) {
 
       const baseUserOp = await builder.buildUserOp({
         calls,
-        maxFeePerGas,
-        maxPriorityFeePerGas,
         keyId: me.keyId
       });
 
-      const reducedUserOp = tuneTransferUserOpGas(baseUserOp);
-      const hasReducedGas =
-        reducedUserOp.callGasLimit !== baseUserOp.callGasLimit ||
-        reducedUserOp.verificationGasLimit !== baseUserOp.verificationGasLimit ||
-        reducedUserOp.preVerificationGas !== baseUserOp.preVerificationGas;
+      await ensureUserOpPrefund({
+        account: me.account as Hex,
+        userOp: baseUserOp,
+      });
 
-      const candidateUserOps = hasReducedGas ? [reducedUserOp, baseUserOp] : [baseUserOp];
+      const hash = await smartWallet.sendUserOperation({ userOp: baseUserOp });
+      const receipt = await smartWallet.waitForUserOperationReceipt({ hash });
 
-      let txHash: string | undefined;
-      let lastError: unknown = null;
-
-      for (let idx = 0; idx < candidateUserOps.length; idx++) {
-        const candidate = candidateUserOps[idx];
-        try {
-          await ensureUserOpPrefund({
-            account: me.account as Hex,
-            userOp: candidate,
-          });
-
-          const hash = await smartWallet.sendUserOperation({ userOp: candidate });
-          const receipt = await smartWallet.waitForUserOperationReceipt({ hash });
-
-          if (!receipt || receipt.success === false || receipt.receipt?.status !== '0x1') {
-            throw new Error('Transaction reverted during execution. No on-chain transfer was finalized.');
-          }
-
-          txHash = receipt.receipt?.transactionHash as string | undefined;
-          if (!txHash) {
-            throw new Error('Transaction confirmed but transaction hash is missing in receipt.');
-          }
-
-          break;
-        } catch (candidateError) {
-          lastError = candidateError;
-          if (idx === 0 && candidateUserOps.length > 1 && isGasTooTightError(candidateError)) {
-            continue;
-          }
-        }
+      if (!receipt || receipt.success === false || receipt.receipt?.status !== '0x1') {
+        throw new Error('Transaction reverted during execution. No on-chain transfer was finalized.');
       }
 
+      const txHash = receipt.receipt?.transactionHash as string | undefined;
       if (!txHash) {
-        throw (lastError as Error) || new Error('Failed to send transaction.');
+        throw new Error('Transaction confirmed but transaction hash is missing in receipt.');
       }
 
       setSuccessTxHash(txHash);

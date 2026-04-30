@@ -122,18 +122,23 @@ export class WebAuthn {
   public static async get(challenge?: Hex): Promise<P256Credential | null> {
     this.isSupportedByBrowser();
 
-    const options: PublicKeyCredentialRequestOptions = {
-      timeout: 60000,
-      challenge: challenge
-        ? Buffer.from(challenge.slice(2), "hex")
-        : Uint8Array.from("random-challenge", (c) => c.charCodeAt(0)),
-      rpId: window.location.hostname,
-      userVerification: "preferred",
-    } as PublicKeyCredentialRequestOptions;
+      let challengeBuffer: Uint8Array;
+      if (challenge && typeof challenge === "string" && challenge.startsWith("0x")) {
+        challengeBuffer = Buffer.from(challenge.slice(2), "hex");
+      } else {
+        challengeBuffer = Uint8Array.from("random-challenge", (c) => c.charCodeAt(0));
+      }
 
-    const credential = await window.navigator.credentials.get({
-      publicKey: options,
-    });
+      const options: PublicKeyCredentialRequestOptions = {
+        timeout: 60000,
+        challenge: challengeBuffer,
+        rpId: window.location.hostname,
+        userVerification: "preferred",
+      } as PublicKeyCredentialRequestOptions;
+
+      const credential = await window.navigator.credentials.get({
+        publicKey: options,
+      });
 
     if (!credential) {
       return null;

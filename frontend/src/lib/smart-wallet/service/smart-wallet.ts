@@ -67,8 +67,25 @@ class SmartWallet {
     }
   }
 
+  private async _assertNetworkConsistency(): Promise<void> {
+    const [bundlerChainIdHex, publicChainId] = await Promise.all([
+      this._client.request({ method: "eth_chainId" as any, params: [] as any }) as Promise<Hex>,
+      this._publicClient.getChainId(),
+    ]);
+
+    const bundlerChainId = Number(BigInt(bundlerChainIdHex));
+    if (bundlerChainId !== publicChainId) {
+      throw new Error(
+        `Network mismatch: NEXT_PUBLIC_BUNDLER_URL chainId (${bundlerChainId}) ` +
+          `!= NEXT_PUBLIC_RPC_ENDPOINT chainId (${publicChainId}). ` +
+          "Set both URLs to the same chain before sending transactions."
+      );
+    }
+  }
+
   public async sendUserOperation(args: { userOp: UserOperationAsHex }): Promise<Hash> {
     this._isInit();
+    await this._assertNetworkConsistency();
 
     const entryPoint = getContract({
       address: ENTRYPOINT_ADDRESS,

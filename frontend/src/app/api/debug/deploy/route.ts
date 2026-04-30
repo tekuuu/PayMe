@@ -7,9 +7,11 @@ function mask(value: string | undefined): string | null {
 }
 
 export async function GET() {
+  const resolvedBundlerUrl = process.env.NEXT_PUBLIC_BUNDLER_URL;
+
   const requiredEnv = {
     NEXT_PUBLIC_RPC_ENDPOINT: !!process.env.NEXT_PUBLIC_RPC_ENDPOINT,
-    NEXT_PUBLIC_PIMLICO_BUNDLER_URL: !!process.env.NEXT_PUBLIC_PIMLICO_BUNDLER_URL,
+    NEXT_PUBLIC_BUNDLER_URL: !!resolvedBundlerUrl,
     NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS: !!process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS,
     NEXT_PUBLIC_PRIVATE_CARD_FACTORY_ADDRESS: !!process.env.NEXT_PUBLIC_PRIVATE_CARD_FACTORY_ADDRESS,
     NEXT_PUBLIC_CUSDC_WRAPPER_ADDRESS: !!process.env.NEXT_PUBLIC_CUSDC_WRAPPER_ADDRESS,
@@ -28,7 +30,7 @@ export async function GET() {
     },
     publicConfig: {
       rpcEndpoint: mask(process.env.NEXT_PUBLIC_RPC_ENDPOINT),
-      bundlerUrl: mask(process.env.NEXT_PUBLIC_PIMLICO_BUNDLER_URL),
+      bundlerUrl: mask(resolvedBundlerUrl),
       factory: process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS || null,
       privateCardFactory: process.env.NEXT_PUBLIC_PRIVATE_CARD_FACTORY_ADDRESS || null,
       cusdcWrapper: process.env.NEXT_PUBLIC_CUSDC_WRAPPER_ADDRESS || null,

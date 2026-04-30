@@ -14,6 +14,7 @@ import {
 import { UserOperationAsHex, Call } from "@/lib/smart-wallet/service/userOps/types";
 import { ENTRYPOINT_ABI, ENTRYPOINT_ADDRESS, FACTORY_ABI } from "@/config/constants";
 import { smartWallet } from "@/lib/smart-wallet";
+import { DEFAULT_USER_OP } from "./constants";
 
 export class UserOpBuilder {
   public relayer: Hex = "0x061060a65146b3265C62fC8f3AE977c9B27260fF";
@@ -40,6 +41,123 @@ export class UserOpBuilder {
     });
   }
 
+  private _toBigInt(value: unknown): bigint | undefined {
+    if (typeof value === "bigint") return value;
+    if (typeof value === "number" && Number.isFinite(value)) return BigInt(Math.trunc(value));
+    if (typeof value === "string" && value.length > 0) {
+      try {
+        return BigInt(value);
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  }
+
+  private _normalizeGasQuote(quote: unknown): {
+    maxFeePerGas?: bigint;
+    maxPriorityFeePerGas?: bigint;
+  } {
+    if (!quote || typeof quote !== "object") {
+      return {};
+    }
+
+    const candidate = quote as Record<string, unknown>;
+    const directMaxFee = this._toBigInt(candidate.maxFeePerGas);
+    const directPriority = this._toBigInt(candidate.maxPriorityFeePerGas);
+
+    if (directMaxFee !== undefined || directPriority !== undefined) {
+      return {
+        maxFeePerGas: directMaxFee,
+        maxPriorityFeePerGas: directPriority,
+      };
+    }
+
+    for (const tier of [candidate.fast, candidate.standard, candidate.slow]) {
+      const normalizedTier = this._normalizeGasQuote(tier);
+      if (
+        normalizedTier.maxFeePerGas !== undefined ||
+        normalizedTier.maxPriorityFeePerGas !== undefined
+      ) {
+        return normalizedTier;
+      }
+    }
+
+    const gasPrice = this._toBigInt(candidate.gasPrice);
+    if (gasPrice !== undefined) {
+      return {
+        maxFeePerGas: gasPrice,
+        maxPriorityFeePerGas: gasPrice / 2n,
+      };
+    }
+
+    return {};
+  }
+
+  private _applyGasBuffer(value: bigint): bigint {
+    if (value <= 0n) return 0n;
+    const bufferBps = 2500n;
+    return (value * (10_000n + bufferBps) + 9_999n) / 10_000n;
+  }
+
+  private _maxBigInt(values: Array<bigint | undefined>): bigint {
+    let best = 0n;
+    for (const value of values) {
+      if (value !== undefined && value > best) {
+        best = value;
+      }
+    }
+    return best;
+  }
+
+  private async _resolveUserOpFees(input: {
+    maxFeePerGas?: bigint;
+    maxPriorityFeePerGas?: bigint;
+  }): Promise<{ maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }> {
+    const bundlerQuote = await (async () => {
+      try {
+        const rawQuote = await smartWallet.client.request({
+          method: "pimlico_getUserOperationGasPrice" as any,
+          params: [] as any,
+        } as any);
+
+        return this._normalizeGasQuote(rawQuote);
+      } catch {
+        return {};
+      }
+    })();
+
+    const fees = await this.publicClient.estimateFeesPerGas().catch(
+      () => ({} as { maxFeePerGas?: bigint; maxPriorityFeePerGas?: bigint }),
+    );
+    const networkGasPrice = await this.publicClient.getGasPrice().catch(() => 0n);
+
+    const prioritySource =
+      input.maxPriorityFeePerGas ??
+      bundlerQuote.maxPriorityFeePerGas ??
+      fees.maxPriorityFeePerGas ??
+      (networkGasPrice > 0n ? networkGasPrice / 2n : DEFAULT_USER_OP.maxPriorityFeePerGas);
+
+    const feeSource =
+      input.maxFeePerGas ??
+      bundlerQuote.maxFeePerGas ??
+      fees.maxFeePerGas ??
+      (networkGasPrice > 0n ? networkGasPrice : prioritySource);
+
+    const maxPriorityFeePerGas = this._maxBigInt([
+      this._applyGasBuffer(prioritySource),
+      DEFAULT_USER_OP.maxPriorityFeePerGas,
+    ]);
+
+    const maxFeePerGas = this._maxBigInt([
+      this._applyGasBuffer(feeSource),
+      maxPriorityFeePerGas,
+      DEFAULT_USER_OP.maxFeePerGas,
+    ]);
+
+    return { maxFeePerGas, maxPriorityFeePerGas };
+  }
+
   async buildUserOp({
     calls,
     maxFeePerGas,
@@ -59,34 +177,11 @@ export class UserOpBuilder {
   }): Promise<UserOperationAsHex> {
     smartWallet.init();
 
-    let resolvedMaxFeePerGas = maxFeePerGas;
-    let resolvedMaxPriorityFeePerGas = maxPriorityFeePerGas;
-
-    if (!resolvedMaxFeePerGas || !resolvedMaxPriorityFeePerGas) {
-      // Prefer chain fee estimates. Pimlico's "fast" quotes can be much higher than needed,
-      // which increases the required prefund and can break fresh-account flows.
-      const fees = await this.publicClient.estimateFeesPerGas();
-      resolvedMaxFeePerGas = resolvedMaxFeePerGas ?? fees.maxFeePerGas ?? 0n;
-      resolvedMaxPriorityFeePerGas = resolvedMaxPriorityFeePerGas ?? fees.maxPriorityFeePerGas ?? 0n;
-
-      // Best-effort cap using bundler quotes (if available) to avoid underpricing,
-      // without letting an aggressive quote explode prefund requirements.
-      try {
-        const gasPrice = await smartWallet.client.request({
-          method: "pimlico_getUserOperationGasPrice" as never,
-        } as never);
-        const pimlicoMax = BigInt((gasPrice as any).fast.maxFeePerGas);
-        const pimlicoTip = BigInt((gasPrice as any).fast.maxPriorityFeePerGas);
-
-        // Cap at 2x the chain estimate (still plenty for sepolia volatility).
-        const capMax = resolvedMaxFeePerGas * 2n;
-        const capTip = resolvedMaxPriorityFeePerGas * 2n;
-        resolvedMaxFeePerGas = pimlicoMax < capMax ? pimlicoMax : capMax;
-        resolvedMaxPriorityFeePerGas = pimlicoTip < capTip ? pimlicoTip : capTip;
-      } catch {
-        // ignore
-      }
-    }
+    const { maxFeePerGas: resolvedMaxFeePerGas, maxPriorityFeePerGas: resolvedMaxPriorityFeePerGas } =
+      await this._resolveUserOpFees({
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+      });
 
     const { account, publicKey: resolvedPublicKey } = await this._resolveSmartWalletIdentity({
       keyId,

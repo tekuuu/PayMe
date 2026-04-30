@@ -7,7 +7,7 @@ The frontend for the **PayMe** protocol is built with **Next.js 15**, **React**,
 - **Tailwind CSS & shadcn/ui**: For robust, modern styling and component architecture.
 - **viem & wagmi**: Ethereum client management, ABIs, and local chain interop.
 - **fhevm-sdk/react**: Front-end components managing FHE gateways, EIP-712 decryption signatures, and ciphertext preparation.
-- **Pimlico**: Bundler and Paymaster APIs for submitting gas-abstracted Smart Wallet user operations.
+- **ERC-4337 Bundler**: RPC endpoint for submitting smart-wallet UserOperations.
 
 ## ⚙️ How It Works (The FHE + AA Flow)
 1. **Passkey Onboarding:** The user connects or creates a passkey via WebAuthn API. No seed phrases are exposed. 
@@ -29,7 +29,7 @@ Copy `.env.example.txt` (or create an `.env.local` file) in the `frontend` root 
 \`\`\`env
 # Infrastructure Providers
 NEXT_PUBLIC_RPC_ENDPOINT="https://sepolia.infura.io/v3/YOUR_INFURA_KEY"
-NEXT_PUBLIC_PIMLICO_BUNDLER_URL="https://api.pimlico.io/v2/11155111/rpc?apikey=YOUR_PIMLICO_KEY"
+NEXT_PUBLIC_BUNDLER_URL="https://your-bundler.example.com/rpc"
 
 # Contracts
 NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS="0x..." # Webauthn Account Factory address
