@@ -3,6 +3,7 @@
 import React from 'react';
 import { SidebarTrigger } from '../ui/sidebar';
 import { UserNav } from './user-nav';
+import { ThemeModeToggle } from '../themes/theme-mode-toggle';
 import { useFhevmContext } from '@/providers/fhevm-provider';
 import { toast } from 'sonner';
 
@@ -40,6 +41,7 @@ export default function Header() {
         >
           Refresh FHE
         </button>
+        <ThemeModeToggle />
         <UserNav />
       </div>
     </header>

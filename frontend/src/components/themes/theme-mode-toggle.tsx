@@ -1,46 +1,68 @@
 'use client';
 
-import { IconBrightness } from '@tabler/icons-react';
+import { IconBrightness, IconSun, IconMoon, IconDeviceDesktop } from '@tabler/icons-react';
 import { useTheme } from 'next-themes';
 import * as React from 'react';
 
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export function ThemeModeToggle() {
-  const { setTheme, resolvedTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = React.useState(false);
 
-  const handleThemeToggle = React.useCallback(
-    (e?: React.MouseEvent) => {
-      const newMode = resolvedTheme === 'dark' ? 'light' : 'dark';
-      const root = document.documentElement;
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
-      if (!document.startViewTransition) {
-        setTheme(newMode);
-        return;
-      }
+  if (!mounted) {
+    return (
+      <Button variant='secondary' size='icon' className='size-8'>
+        <IconBrightness />
+      </Button>
+    );
+  }
 
-      // Set coordinates from the click event
-      if (e) {
-        root.style.setProperty('--x', `${e.clientX}px`);
-        root.style.setProperty('--y', `${e.clientY}px`);
-      }
-
-      document.startViewTransition(() => {
-        setTheme(newMode);
-      });
-    },
-    [resolvedTheme, setTheme]
-  );
+  const options = [
+    { value: 'light', label: 'Light', icon: IconSun },
+    { value: 'dark', label: 'Dark', icon: IconMoon },
+    { value: 'system', label: 'System', icon: IconDeviceDesktop },
+  ];
 
   return (
-    <Button
-      variant='secondary'
-      size='icon'
-      className='group/toggle size-8'
-      onClick={handleThemeToggle}
-    >
-      <IconBrightness />
-      <span className='sr-only'>Toggle theme</span>
-    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant='secondary' size='icon' className='size-8'>
+          <IconBrightness />
+          <span className='sr-only'>Toggle theme</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align='end'>
+        {options.map((option) => {
+          const Icon = option.icon;
+          const isActive = theme === option.value;
+          return (
+            <DropdownMenuItem
+              key={option.value}
+              onClick={() => setTheme(option.value)}
+              className={isActive ? 'font-semibold' : undefined}
+            >
+              <Icon size={14} />
+              <span>{option.label}</span>
+              {isActive && (
+                <span className='ml-auto text-xs text-muted-foreground'>
+                  Active
+                </span>
+              )}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
