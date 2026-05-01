@@ -180,6 +180,9 @@ export function SendTokenCard({ me }: { me: Me }) {
       setStep('prepare');
       smartWallet.init();
 
+      // Yield to browser so React can render the loading state
+      await new Promise((r) => setTimeout(r, 0));
+
       const transferCall =
         selectedToken.address === null
           ? {

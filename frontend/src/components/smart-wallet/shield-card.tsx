@@ -307,6 +307,9 @@ export function ShieldCard({ me }: { me: Me }) {
     setError(null);
     setRawError(null);
 
+    // Yield to browser so React can render the loading state
+    await new Promise((r) => setTimeout(r, 0));
+
     try {
       smartWallet.init();
 
@@ -417,9 +420,11 @@ export function ShieldCard({ me }: { me: Me }) {
 
     try {
       setIsSubmitting(true);
+      setStep(isShielding ? 'prepare' : 'prepare');
       smartWallet.init();
 
-      setStep(isShielding ? 'prepare' : 'prepare');
+      // Yield to browser so React can render the loading state
+      await new Promise((r) => setTimeout(r, 0));
 
       const sender = me.account as Hex;
 
