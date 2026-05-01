@@ -347,10 +347,13 @@ export function ShieldCard({ me }: { me: Me }) {
         preVerificationGas: 120_000n,
       });
 
+      setStep('fund');
       await ensureUserOpPrefund({
         account: me.account as Hex,
         userOp: finalizeUserOp,
       });
+
+      setStep('finalize');
 
       const hash = await smartWallet.sendUserOperation({ userOp: finalizeUserOp });
       const receipt = await smartWallet.waitForUserOperationReceipt({ hash });
@@ -416,6 +419,8 @@ export function ShieldCard({ me }: { me: Me }) {
       setIsSubmitting(true);
       smartWallet.init();
 
+      setStep(isShielding ? 'prepare' : 'prepare');
+
       const sender = await builder.getSenderAddress(me.keyId);
 
       if (isShielding) {
@@ -442,10 +447,13 @@ export function ShieldCard({ me }: { me: Me }) {
           preVerificationGas: 120_000n,
         });
 
+        setStep('fund');
         await ensureUserOpPrefund({
           account: me.account as Hex,
           userOp: approveUserOp,
         });
+
+        setStep('approve');
 
         const approveHash = await smartWallet.sendUserOperation({ userOp: approveUserOp });
         const approveReceipt = await smartWallet.waitForUserOperationReceipt({ hash: approveHash });
@@ -495,10 +503,13 @@ export function ShieldCard({ me }: { me: Me }) {
           preVerificationGas: 220_000n,
         });
 
+        setStep('fund');
         await ensureUserOpPrefund({
           account: me.account as Hex,
           userOp: wrapUserOp,
         });
+
+        setStep('wrap');
 
         const wrapHash = await smartWallet.sendUserOperation({ userOp: wrapUserOp });
         const wrapReceipt = await smartWallet.waitForUserOperationReceipt({ hash: wrapHash });
@@ -553,10 +564,13 @@ export function ShieldCard({ me }: { me: Me }) {
           preVerificationGas: 400_000n,
         });
 
+        setStep('fund');
         await ensureUserOpPrefund({
           account: me.account as Hex,
           userOp: unwrapUserOp,
         });
+
+        setStep('unwrap');
 
         const unwrapHash = await smartWallet.sendUserOperation({ userOp: unwrapUserOp });
         const unwrapReceipt = await smartWallet.waitForUserOperationReceipt({ hash: unwrapHash });
@@ -824,10 +838,12 @@ export function ShieldCard({ me }: { me: Me }) {
       {step && (
         <div className='flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary'>
           <Loader2 size={14} className='animate-spin' />
+          {step === 'prepare' && 'Preparing transaction...'}
           {step === 'approve' && 'Approving USDC...'}
+          {step === 'fund' && 'Funding wallet gas...'}
           {step === 'wrap' && 'Wrapping to cUSDC...'}
           {step === 'encrypt' && 'Encrypting amount...'}
-          {step === 'unwrap' && 'Initiating unwrap...'}
+          {step === 'unwrap' && 'Submitting unwrap...'}
           {step === 'finalize' && 'Finalizing...'}
         </div>
       )}

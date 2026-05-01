@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { AlertCircle, Send, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, Send, CheckCircle2, Loader2 } from 'lucide-react';
 import { IconWallet, IconCoins, IconHistory } from '@tabler/icons-react';
 import { encodeFunctionData, Hex, isAddress, parseEther, parseUnits, zeroAddress } from 'viem';
 import { toast } from 'sonner';
@@ -95,6 +95,7 @@ export function SendTokenCard({ me }: { me: Me }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successTxHash, setSuccessTxHash] = useState<string | null>(null);
+  const [step, setStep] = useState<string | null>(null);
   const [recentRecipients, setRecentRecipients] = useState<RecentRecipient[]>([]);
 
   useMemo(() => {
@@ -176,6 +177,7 @@ export function SendTokenCard({ me }: { me: Me }) {
 
     try {
       setIsSubmitting(true);
+      setStep('prepare');
       smartWallet.init();
 
       const transferCall =
@@ -220,10 +222,13 @@ export function SendTokenCard({ me }: { me: Me }) {
         keyId: me.keyId,
       });
 
+      setStep('fund');
       await ensureUserOpPrefund({
         account: me.account as Hex,
         userOp: baseUserOp,
       });
+
+      setStep('send');
 
       const hash = await smartWallet.sendUserOperation({ userOp: baseUserOp });
       const receipt = await smartWallet.waitForUserOperationReceipt({ hash });
@@ -238,6 +243,7 @@ export function SendTokenCard({ me }: { me: Me }) {
       }
 
       setSuccessTxHash(txHash);
+      setStep(null);
       saveRecipient(recipient as Hex);
       toast.success(`${amount} ${selectedToken.symbol} sent successfully`);
     } catch (err: any) {
@@ -246,6 +252,7 @@ export function SendTokenCard({ me }: { me: Me }) {
       toast.error('Transaction failed');
     } finally {
       setIsSubmitting(false);
+      setStep(null);
     }
   }
 
@@ -392,6 +399,16 @@ export function SendTokenCard({ me }: { me: Me }) {
         />
       </div>
 
+      {/* Step indicator */}
+      {step && (
+        <div className='flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary'>
+          <Loader2 size={14} className='animate-spin' />
+          {step === 'prepare' && 'Preparing transaction...'}
+          {step === 'fund' && 'Funding wallet gas...'}
+          {step === 'send' && 'Sending...'}
+        </div>
+      )}
+
       {/* Error */}
       {error && (
         <div className='flex items-center gap-2 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-500'>
@@ -406,8 +423,17 @@ export function SendTokenCard({ me }: { me: Me }) {
         disabled={isSubmitting || !recipient || !amount}
         className='w-full rounded-lg h-10 font-medium gap-2'
       >
-        <Send size={16} />
-        {isSubmitting ? 'Sending...' : 'Send'}
+        {isSubmitting ? (
+          <>
+            <Loader2 size={16} className='animate-spin' />
+            Sending...
+          </>
+        ) : (
+          <>
+            <Send size={16} />
+            Send
+          </>
+        )}
       </Button>
     </form>
   );
