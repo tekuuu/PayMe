@@ -84,6 +84,40 @@ function withGasFloors(
   };
 }
 
+function sanitizeErrorMessage(raw: string): string {
+  const lower = raw.toLowerCase();
+  
+  if (lower.includes('timed out') || lower.includes('took too long') || lower.includes('timeout')) {
+    return 'Network request timed out. Please check your connection and try again.';
+  }
+  if (lower.includes('insufficient') && (lower.includes('balance') || lower.includes('fund'))) {
+    return 'Insufficient balance for this operation.';
+  }
+  if (lower.includes('user rejected') || lower.includes('user denied')) {
+    return 'Transaction was cancelled.';
+  }
+  if (lower.includes('revert') || lower.includes('reverted')) {
+    const revertMatch = raw.match(/revert(?:ed)?[:\s]+(.{1,80})/i);
+    if (revertMatch) {
+      return `Transaction reverted: ${revertMatch[1].trim()}`;
+    }
+    return 'Transaction reverted on chain.';
+  }
+  if (lower.includes('gas') && (lower.includes('required') || lower.includes('estimate'))) {
+    return 'Gas estimation failed. Try with a higher gas limit.';
+  }
+  if (lower.includes('nonce')) {
+    return 'Nonce mismatch. Please refresh and try again.';
+  }
+  
+  // Fallback: truncate if too long
+  if (raw.length > 120) {
+    return raw.slice(0, 120).trim() + '...';
+  }
+  
+  return raw;
+}
+
 function maxBigInt(values: bigint[]) {
   let best = values[0] ?? 0n;
   for (const value of values) {
@@ -312,8 +346,9 @@ export function ShieldCard({ me }: { me: Me }) {
       toast.success(`${pendingUnwrap.amount} USDC received!`);
     } catch (err: any) {
       console.error('Finalize error:', err);
-      setError(err.message || 'Finalize failed');
-      toast.error(err.message || 'Finalize failed');
+      const friendly = sanitizeErrorMessage(err.message || 'Finalize failed');
+      setError(friendly);
+      toast.error(friendly);
     } finally {
       setIsFinalizing(false);
       setStep(null);
@@ -600,9 +635,9 @@ export function ShieldCard({ me }: { me: Me }) {
         setAmount('');
       }
     } catch (err: any) {
-      console.error('Shield error:', err);
-      setError(err.message || 'Transaction failed');
-      toast.error(err.message || 'Transaction failed');
+      const friendly = sanitizeErrorMessage(err.message || 'Transaction failed');
+      setError(friendly);
+      toast.error(friendly);
     } finally {
       setIsSubmitting(false);
       setStep(null);
@@ -763,9 +798,9 @@ export function ShieldCard({ me }: { me: Me }) {
 
       {/* Error */}
       {error && (
-        <div className='flex items-center gap-2 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-500'>
-          <AlertCircle size={14} />
-          {error}
+        <div className='flex items-start gap-2 rounded-lg bg-rose-500/10 px-3 py-2.5 text-xs text-rose-500'>
+          <AlertCircle size={14} className='shrink-0 mt-0.5' />
+          <span className='break-words leading-snug'>{error}</span>
         </div>
       )}
 
