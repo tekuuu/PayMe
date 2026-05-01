@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SendTokenCard } from '@/components/smart-wallet/send-token-card';
 import { ReceiveTokenCard } from '@/components/smart-wallet/receive-token-card';
+import { ShieldCard } from '@/components/smart-wallet/shield-card';
 import { useConfidentialTokenBalance } from '@/hooks/use-confidential-token-balance';
 import { useTokenBalances } from '@/hooks/use-token-balances';
 import { useMe } from '@/providers/auth-provider';
@@ -346,12 +347,21 @@ export default function CustomerDashboardPage() {
             >
               Receive
             </TabsTrigger>
+            <TabsTrigger
+              value='shield'
+              className='rounded-full px-4 py-1.5 text-sm font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm'
+            >
+              Shield
+            </TabsTrigger>
           </TabsList>
           <TabsContent value='send' className='mt-0'>
             <SendTokenCard me={me} />
           </TabsContent>
           <TabsContent value='receive' className='mt-0'>
             <ReceiveTokenCard address={me.account} />
+          </TabsContent>
+          <TabsContent value='shield' className='mt-0'>
+            <ShieldCard me={me} />
           </TabsContent>
         </Tabs>
       </div>

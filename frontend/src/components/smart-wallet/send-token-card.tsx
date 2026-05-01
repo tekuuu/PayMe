@@ -8,7 +8,7 @@ import { emptyHex, UserOpBuilder } from '@/lib/smart-wallet/service/userOps';
 import { ensureUserOpPrefund } from '@/lib/smart-wallet/service/userOps/prefund';
 import { Me } from '@/providers/auth-provider';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { CryptoInput } from '@/components/ui/crypto-input';
 import {
   Select,
   SelectContent,
@@ -342,12 +342,12 @@ export function SendTokenCard({ me }: { me: Me }) {
         <label className='text-xs font-medium text-muted-foreground'>
           Recipient Address
         </label>
-        <Input
+        <CryptoInput
           value={recipient}
           onChange={(e) => setRecipient(e.target.value)}
           placeholder='0x...'
           autoComplete='off'
-          className='rounded-lg bg-muted/30 border-border/60 font-mono text-sm shadow-inner h-10'
+          className='font-mono text-sm'
           required
         />
         {recentRecipients.length > 0 && (
@@ -374,29 +374,22 @@ export function SendTokenCard({ me }: { me: Me }) {
         <label className='text-xs font-medium text-muted-foreground'>
           Amount
         </label>
-        <div className='relative'>
-          <Input
-            type='number'
-            step='any'
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder='0.00'
-            className='rounded-lg bg-muted/30 border-border/60 font-mono text-sm shadow-inner h-10 pr-16'
-            required
-          />
-          <div className='absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2'>
-            <button
-              type='button'
-              onClick={setMaxAmount}
-              className='text-[10px] font-semibold text-primary uppercase hover:opacity-80'
-            >
-              Max
-            </button>
-            <span className='text-xs font-medium text-muted-foreground'>
+        <CryptoInput
+          type='number'
+          min='0'
+          step='any'
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder='0.00'
+          suffix={
+            <span className='text-sm font-semibold text-foreground'>
               {selectedToken.symbol}
             </span>
-          </div>
-        </div>
+          }
+          showMaxButton
+          onMaxClick={setMaxAmount}
+          required
+        />
       </div>
 
       {/* Error */}

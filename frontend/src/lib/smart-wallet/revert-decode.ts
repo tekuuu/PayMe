@@ -2,6 +2,7 @@ import { decodeAbiParameters, Hex } from 'viem';
 
 const SENDER_NOT_ALLOWED_SELECTOR = '0xd0d25976'; // SenderNotAllowed(address)
 const ERROR_STRING_SELECTOR = '0x08c379a0'; // Error(string)
+const TFHE_EXECUTE_SELECTOR = '0x67cfe805'; // TFHE.execute(...) - FHE operation failed
 
 function decodeAddressArg(data: Hex): string | null {
   try {
@@ -46,6 +47,10 @@ export function describeExecutionRevertReason(reasonLike: unknown): string | und
     if (message) {
       return message;
     }
+  }
+
+  if (selector === TFHE_EXECUTE_SELECTOR) {
+    return 'FHE operation failed: encrypted handle ACL mismatch or invalid ciphertext. Ensure the wrapper supports unwrap with FHE handles.';
   }
 
   return reason;
