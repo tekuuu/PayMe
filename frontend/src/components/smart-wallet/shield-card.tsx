@@ -421,7 +421,7 @@ export function ShieldCard({ me }: { me: Me }) {
 
       setStep(isShielding ? 'prepare' : 'prepare');
 
-      const sender = await builder.getSenderAddress(me.keyId);
+      const sender = me.account as Hex;
 
       if (isShielding) {
         setStep('approve');
