@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import PageContainer from '@/components/layout/page-container';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -147,213 +145,203 @@ export default function MyCardPage() {
 
     if (!me) {
         return (
-            <PageContainer>
-                <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6 text-center">
-                    <div className="p-6 bg-primary/5 rounded-full animate-pulse">
-                        <IconLock size={64} className="text-primary/40" />
-                    </div>
-                    <div className="space-y-2 max-w-sm">
-                        <h2 className="text-2xl font-bold tracking-tight text-foreground">Secure Vault Locked</h2>
-                        <p className="text-muted-foreground text-sm">
-                            Access to your private virtual card requires a Passkey-secured Smart Wallet.
-                        </p>
-                    </div>
-                    <SmartWalletOnboarding variant="default" className="w-full max-w-[200px]" />
+            <div className='flex flex-col items-center justify-center min-h-[60vh] space-y-6 text-center p-6'>
+                <div className='p-6 bg-primary/5 rounded-full animate-pulse'>
+                    <IconLock size={64} className='text-primary/40' />
                 </div>
-            </PageContainer>
+                <div className='space-y-2 max-w-sm'>
+                    <h2 className='text-2xl font-bold tracking-tight text-foreground'>
+                        Secure Vault Locked
+                    </h2>
+                    <p className='text-muted-foreground text-sm'>
+                        Access to your private virtual card requires a Passkey-secured Smart Wallet.
+                    </p>
+                </div>
+                <SmartWalletOnboarding variant='default' className='w-full max-w-[200px]' />
+            </div>
         );
     }
 
     return (
-        <PageContainer scrollable>
-            <div className="flex-1 space-y-1 pt-1">
-                <div className="flex items-center justify-between space-y-0 border-b pb-1 px-2 md:px-4">
-                    <h2 className="text-xl font-bold tracking-tight">My Card</h2>
-                    <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-full text-[10px] font-semibold border border-emerald-500/20">
-                        <IconShieldCheck size={12} /> Smart Wallet Linked
-                    </div>
-                </div>
-
-                <div className="px-2">
-                    {isLoading ? (
-                        <div className="flex items-center justify-center p-12">
-                            <span className="animate-spin w-8 h-8 rounded-full border-4 border-primary border-t-transparent" />
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            {hasCard ? (
-                                <>
-                                    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-                                        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                                            <div className="w-full space-y-2">
-                                                <div className="flex items-center gap-2">
-                                                    <label htmlFor="card-select" className="block text-sm font-medium text-muted-foreground">
-                                                        Selected Card
-                                                    </label>
-                                                    {selectedCardLabel ? (
-                                                        <Badge variant={selectedCardLabel === 'Owned' ? 'default' : 'secondary'}>
-                                                            {selectedCardLabel}
-                                                        </Badge>
-                                                    ) : null}
-                                                </div>
-                                                <select
-                                                    id="card-select"
-                                                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring focus:ring-primary/30"
-                                                    value={selectedCardAddress || ''}
-                                                    onChange={(e) => setSelectedCardAddress(e.target.value as Hex)}
-                                                >
-                                                    {cards.map((card, index) => (
-                                                        <option key={card.address} value={card.address}>
-                                                            {`${card.origin === 'owned' ? 'Owned' : 'Imported'} ${index + 1} • ${card.address}`}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                                <p className="text-xs text-muted-foreground">
-                                                    Remove hides a card from this browser only. It does not delete anything on-chain.
-                                                </p>
-                                            </div>
-
-                                            <div className="flex flex-col gap-2 sm:flex-row">
-                                                <Button onClick={() => createCard()} disabled={isCreating} className="gap-2">
-                                                    <IconPlus size={16} />
-                                                    {isCreating ? 'Creating...' : 'Create another card'}
-                                                </Button>
-                                                <Button
-                                                    variant="outline"
-                                                    onClick={handleRemoveSelectedCard}
-                                                    disabled={!selectedCardAddress}
-                                                    className="gap-2"
-                                                >
-                                                    <IconTrash size={16} />
-                                                    Remove from list
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <CardOverview cardAddress={selectedCardAddress} />
-                                </>
-                            ) : (
-                                <CreateCardEmptyState onCreate={createCard} isCreating={isCreating} />
-                            )}
-
-                            <Card className="border-border/60 shadow-sm">
-                                <CardHeader className="space-y-2">
-                                    <div className="flex items-center gap-2">
-                                        <div className="rounded-full bg-primary/10 p-2 text-primary">
-                                            <IconLink size={18} />
-                                        </div>
-                                        <div>
-                                            <CardTitle className="text-lg">Attach or Import a Card</CardTitle>
-                                            <CardDescription>
-                                                Add a card directly by address, or search every card created by a wallet owner and import from the results.
-                                            </CardDescription>
-                                        </div>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="space-y-6">
-                                    <div className="grid gap-4 xl:grid-cols-2">
-                                        <div className="space-y-3 rounded-xl border border-border/60 bg-muted/30 p-4">
-                                            <div>
-                                                <h3 className="text-sm font-semibold">Attach by card address</h3>
-                                                <p className="text-xs text-muted-foreground">
-                                                    Paste a Private Card contract address and link it into this device list.
-                                                </p>
-                                            </div>
-                                            <div className="flex flex-col gap-2 sm:flex-row">
-                                                <Input
-                                                    value={manualCardAddress}
-                                                    onChange={(e) => setManualCardAddress(e.target.value)}
-                                                    placeholder="0x..."
-                                                    className="font-mono"
-                                                />
-                                                <Button onClick={handleAttachByAddress} disabled={isAttaching} className="gap-2">
-                                                    <IconLink size={16} />
-                                                    {isAttaching ? 'Attaching...' : 'Attach'}
-                                                </Button>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-3 rounded-xl border border-border/60 bg-muted/30 p-4">
-                                            <div>
-                                                <h3 className="text-sm font-semibold">Search by owner address</h3>
-                                                <p className="text-xs text-muted-foreground">
-                                                    Look up all cards created by an owner wallet, then import the one you want.
-                                                </p>
-                                            </div>
-                                            <div className="flex flex-col gap-2 sm:flex-row">
-                                                <Input
-                                                    value={searchOwnerAddress}
-                                                    onChange={(e) => setSearchOwnerAddress(e.target.value)}
-                                                    placeholder="Owner wallet address"
-                                                    className="font-mono"
-                                                />
-                                                <Button onClick={handleSearchByOwner} disabled={isSearching} variant="secondary" className="gap-2">
-                                                    <IconSearch size={16} />
-                                                    {isSearching ? 'Searching...' : 'Search'}
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <h3 className="text-sm font-semibold">Search results</h3>
-                                                <p className="text-xs text-muted-foreground">
-                                                    Cards found for {searchOwnerAddress ? shortenAddress(searchOwnerAddress) : 'the selected owner'}.
-                                                </p>
-                                            </div>
-                                            <Badge variant="outline">{searchResults.length} found</Badge>
-                                        </div>
-
-                                        {searchResults.length > 0 ? (
-                                            <div className="space-y-2">
-                                                {searchResults.map((result) => (
-                                                    <div
-                                                        key={result.address}
-                                                        className="flex flex-col gap-3 rounded-xl border border-border/60 bg-background p-4 lg:flex-row lg:items-center lg:justify-between"
-                                                    >
-                                                        <div className="space-y-2">
-                                                            <div className="flex flex-wrap items-center gap-2">
-                                                                <Badge variant={result.isOwned ? 'default' : 'secondary'}>
-                                                                    {result.isOwned ? 'Owned' : 'External'}
-                                                                </Badge>
-                                                                {result.isLinked ? <Badge variant="outline">Linked</Badge> : null}
-                                                                {result.isHidden ? <Badge variant="outline">Hidden locally</Badge> : null}
-                                                            </div>
-                                                            <div>
-                                                                <p className="font-mono text-sm">{result.address}</p>
-                                                                <p className="font-mono text-xs text-muted-foreground">
-                                                                    Owner: {result.owner}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-
-                                                        <Button
-                                                            variant="outline"
-                                                            className="gap-2"
-                                                            onClick={() => handleImportSearchResult(result.address)}
-                                                            disabled={isImportingResult === result.address}
-                                                        >
-                                                            <IconLink size={16} />
-                                                            {isImportingResult === result.address ? 'Importing...' : 'Import'}
-                                                        </Button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">
-                                                Run a search to list cards for an owner address, or attach one directly if you already know the card address.
-                                            </div>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    )}
+        <div className='flex-1 space-y-6 p-6'>
+            {/* Header */}
+            <div className='flex items-center justify-between'>
+                <h2 className='text-2xl font-semibold tracking-tight text-foreground'>
+                    My Card
+                </h2>
+                <div className='flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-500'>
+                    <IconShieldCheck size={12} /> Smart Wallet Linked
                 </div>
             </div>
-        </PageContainer>
+
+            {isLoading ? (
+                <div className='flex items-center justify-center p-12'>
+                    <span className='animate-spin w-8 h-8 rounded-full border-4 border-primary border-t-transparent' />
+                </div>
+            ) : (
+                <div className='mx-auto max-w-3xl space-y-4'>
+                    {hasCard ? (
+                        <>
+                            {/* Card selector */}
+                            <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
+                                <div className='flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between'>
+                                    <div className='w-full space-y-2'>
+                                        <div className='flex items-center gap-2'>
+                                            <label htmlFor='card-select' className='text-xs font-medium text-muted-foreground'>
+                                                Selected Card
+                                            </label>
+                                            {selectedCardLabel ? (
+                                                <Badge variant={selectedCardLabel === 'Owned' ? 'default' : 'secondary'}>
+                                                    {selectedCardLabel}
+                                                </Badge>
+                                            ) : null}
+                                        </div>
+                                        <select
+                                            id='card-select'
+                                            className='w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring focus:ring-primary/30'
+                                            value={selectedCardAddress || ''}
+                                            onChange={(e) => setSelectedCardAddress(e.target.value as Hex)}
+                                        >
+                                            {cards.map((card, index) => (
+                                                <option key={card.address} value={card.address}>
+                                                    {`${card.origin === 'owned' ? 'Owned' : 'Imported'} ${index + 1} • ${shortenAddress(card.address)}`}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div className='flex flex-col gap-2 sm:flex-row'>
+                                        <Button
+                                            variant='outline'
+                                            onClick={() => createCard()}
+                                            disabled={isCreating}
+                                            className='gap-2 rounded-full border border-border/60'
+                                        >
+                                            <IconPlus size={16} />
+                                            {isCreating ? 'Creating...' : 'Create Another'}
+                                        </Button>
+                                        <Button
+                                            variant='ghost'
+                                            onClick={handleRemoveSelectedCard}
+                                            disabled={!selectedCardAddress}
+                                            className='gap-2 rounded-full text-muted-foreground hover:text-foreground'
+                                        >
+                                            <IconTrash size={16} />
+                                            Remove
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Card overview */}
+                            <CardOverview cardAddress={selectedCardAddress} />
+                        </>
+                    ) : (
+                        <CreateCardEmptyState onCreate={createCard} isCreating={isCreating} />
+                    )}
+
+                    {/* Import / Search section */}
+                    <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-6'>
+                        <p className='text-xs uppercase tracking-wide text-muted-foreground mb-4'>
+                            Attach or Import
+                        </p>
+                        <div className='grid gap-4 xl:grid-cols-2'>
+                            {/* Attach by address */}
+                            <div className='rounded-xl border border-border/40 bg-background/30 p-4 space-y-3'>
+                                <h3 className='text-sm font-semibold'>Attach by card address</h3>
+                                <div className='flex flex-col gap-2 sm:flex-row'>
+                                    <Input
+                                        value={manualCardAddress}
+                                        onChange={(e) => setManualCardAddress(e.target.value)}
+                                        placeholder='0x...'
+                                        className='font-mono rounded-lg'
+                                    />
+                                    <Button
+                                        variant='outline'
+                                        onClick={handleAttachByAddress}
+                                        disabled={isAttaching}
+                                        className='gap-2 rounded-full border border-border/60'
+                                    >
+                                        <IconLink size={16} />
+                                        {isAttaching ? 'Attaching...' : 'Attach'}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Search by owner */}
+                            <div className='rounded-xl border border-border/40 bg-background/30 p-4 space-y-3'>
+                                <h3 className='text-sm font-semibold'>Search by owner address</h3>
+                                <div className='flex flex-col gap-2 sm:flex-row'>
+                                    <Input
+                                        value={searchOwnerAddress}
+                                        onChange={(e) => setSearchOwnerAddress(e.target.value)}
+                                        placeholder='Owner wallet address'
+                                        className='font-mono rounded-lg'
+                                    />
+                                    <Button
+                                        variant='outline'
+                                        onClick={handleSearchByOwner}
+                                        disabled={isSearching}
+                                        className='gap-2 rounded-full border border-border/60'
+                                    >
+                                        <IconSearch size={16} />
+                                        {isSearching ? 'Searching...' : 'Search'}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Search results */}
+                        <div className='mt-6 space-y-3'>
+                            <div className='flex items-center justify-between'>
+                                <h3 className='text-sm font-semibold'>Search results</h3>
+                                <Badge variant='outline'>{searchResults.length} found</Badge>
+                            </div>
+
+                            {searchResults.length > 0 ? (
+                                <div className='space-y-2'>
+                                    {searchResults.map((result) => (
+                                        <div
+                                            key={result.address}
+                                            className='flex flex-col gap-3 rounded-xl border border-border/40 bg-background/30 p-4 lg:flex-row lg:items-center lg:justify-between'
+                                        >
+                                            <div className='space-y-2'>
+                                                <div className='flex flex-wrap items-center gap-2'>
+                                                    <Badge variant={result.isOwned ? 'default' : 'secondary'}>
+                                                        {result.isOwned ? 'Owned' : 'External'}
+                                                    </Badge>
+                                                    {result.isLinked ? <Badge variant='outline'>Linked</Badge> : null}
+                                                    {result.isHidden ? <Badge variant='outline'>Hidden locally</Badge> : null}
+                                                </div>
+                                                <div>
+                                                    <p className='font-mono text-sm'>{result.address}</p>
+                                                    <p className='font-mono text-xs text-muted-foreground'>
+                                                        Owner: {shortenAddress(result.owner)}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <Button
+                                                variant='outline'
+                                                className='gap-2 rounded-full border border-border/60'
+                                                onClick={() => handleImportSearchResult(result.address)}
+                                                disabled={isImportingResult === result.address}
+                                            >
+                                                <IconLink size={16} />
+                                                {isImportingResult === result.address ? 'Importing...' : 'Import'}
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className='rounded-xl border border-dashed border-border/40 bg-muted/20 p-6 text-sm text-muted-foreground text-center'>
+                                    Run a search to list cards, or attach one directly.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }

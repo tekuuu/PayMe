@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
     IconEye,
@@ -649,160 +648,164 @@ export function CardOverview({ cardAddress }: { cardAddress: Hex | undefined }) 
     };
 
     return (
-        <div className="mx-auto w-full max-w-4xl space-y-4 animate-in fade-in duration-700">
-            <Card className="overflow-hidden border-none bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white shadow-2xl">
-                <CardHeader className="relative">
-                    <div className="pointer-events-none absolute -right-16 -top-16 h-52 w-52 rounded-full bg-primary/20 blur-3xl" />
-                    <div className="pointer-events-none absolute -bottom-20 -left-16 h-56 w-56 rounded-full bg-emerald-500/15 blur-3xl" />
-                    <CardTitle className="relative text-xl md:text-2xl">Private Card</CardTitle>
-                    <CardDescription>
-                        Simple card view with only the details you need.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="relative space-y-4">
-                    <div className="grid gap-2 rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur-sm md:grid-cols-2">
-                        <div>
-                            <p className="text-xs uppercase text-slate-400">Card address</p>
-                            <div className="mt-1 flex items-start justify-between gap-2">
-                                <p className="font-mono text-xs break-all">{cardAddress || 'Not available'}</p>
-                                <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-7 w-7 text-slate-300 hover:bg-white/10 hover:text-white"
+        <div className='mx-auto w-full max-w-3xl space-y-4 animate-in fade-in duration-700'>
+            {/* Card visualization */}
+            <div className='rounded-2xl border border-border/60 bg-gradient-to-br from-muted/60 to-muted/20 p-4 sm:p-6'>
+                <div className='mx-auto w-full max-w-sm'>
+                    {/* The card */}
+                    <div className='relative overflow-hidden rounded-xl bg-gradient-to-br from-foreground to-foreground/80 p-5 text-background shadow-lg'>
+                        {/* Subtle grid pattern */}
+                        <div className='absolute inset-0 opacity-[0.03]' style={{ backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
+
+                        <div className='relative space-y-4'>
+                            {/* Top row */}
+                            <div className='flex items-center justify-between'>
+                                <span className='text-sm font-bold tracking-[0.2em]'>PAYME</span>
+                                <span className='rounded-full bg-background/10 px-2 py-0.5 text-[10px] font-medium tracking-wide'>
+                                    FHE
+                                </span>
+                            </div>
+
+                            {/* Card number */}
+                            <div className='space-y-1'>
+                                <p className='font-mono text-sm tracking-[0.15em] opacity-60'>
+                                    {cardAddress ? `${cardAddress.slice(0, 6)}  ${cardAddress.slice(6, 12)}  ${cardAddress.slice(12, 18)}  ${cardAddress.slice(-4)}` : '••••  ••••  ••••  ••••'}
+                                </p>
+                                <button
                                     onClick={() => handleCopy(cardAddress, 'Card address')}
-                                    aria-label="Copy card address"
+                                    className='flex items-center gap-1 text-[11px] opacity-40 hover:opacity-80 transition-opacity'
                                 >
-                                    <IconCopy size={14} />
-                                </Button>
+                                    <IconCopy size={12} />
+                                    <span>copy</span>
+                                </button>
                             </div>
-                        </div>
-                        <div>
-                            <p className="text-xs uppercase text-slate-400">Owner</p>
-                            <div className="mt-1 flex items-start justify-between gap-2">
-                                <p className="font-mono text-xs break-all">{resolvedOwnerAddress || 'Loading owner...'}</p>
-                                <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-7 w-7 text-slate-300 hover:bg-white/10 hover:text-white"
-                                    onClick={() => handleCopy(resolvedOwnerAddress, 'Owner address')}
-                                    aria-label="Copy owner address"
-                                >
-                                    <IconCopy size={14} />
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
 
-                    {ownerGuardMessage ? (
-                        <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-sm text-amber-100">
-                            {ownerGuardMessage}
-                        </div>
-                    ) : null}
-
-                    <div className="flex items-center justify-between rounded-xl border border-primary/30 bg-primary/10 p-3">
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <p className="text-xs uppercase text-primary/80">Private balance</p>
-                                {(isDecrypting || isDecryptInProgress) && (
-                                    <span className="rounded-full bg-slate-800 px-2 py-1 text-[10px] font-semibold text-white">
-                                        Decrypting...
+                            {/* Bottom row */}
+                            <div className='flex items-end justify-between'>
+                                <div className='space-y-0.5'>
+                                    <p className='text-[10px] uppercase tracking-wide opacity-40'>Owner</p>
+                                    <p className='font-mono text-xs'>
+                                        {resolvedOwnerAddress ? `${resolvedOwnerAddress.slice(0, 6)}...${resolvedOwnerAddress.slice(-4)}` : '••••••••••'}
+                                    </p>
+                                </div>
+                                {ownerGuardMessage ? (
+                                    <span className='rounded-md bg-amber-500/20 px-2 py-1 text-[10px] text-amber-200'>
+                                        External
+                                    </span>
+                                ) : (
+                                    <span className='rounded-md bg-background/10 px-2 py-1 text-[10px]'>
+                                        Owned
                                     </span>
                                 )}
                             </div>
-                            <p className="text-xl font-bold tracking-tight md:text-2xl">{formattedBalance}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Button
-                                size="sm"
-                                className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-                                onClick={handleDecryptBalance}
-                                disabled={isDecrypting || isDecryptInProgress || !isCurrentUserOwner}
-                            >
-                                <IconEye size={16} />
-                                {!isCurrentUserOwner ? 'Owner only' : isDecrypting || isDecryptInProgress ? 'Decrypting...' : 'Decrypt'}
-                            </Button>
                         </div>
                     </div>
+                </div>
+            </div>
 
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                        <p className="mb-2 text-xs uppercase text-slate-400">Add funds</p>
-                        <div className="flex flex-col gap-2 md:flex-row">
-                            <input
-                                type="number"
-                                min="0"
-                                step="0.000001"
-                                placeholder={`Amount in ${underlyingTokenSymbol || 'token'}`}
-                                className="h-10 flex-1 rounded-md border border-white/15 bg-black/20 px-3 text-sm text-white placeholder:text-slate-400"
-                                value={fundAmount}
-                                onChange={(e) => setFundAmount(e.target.value)}
-                            />
-                            <Button
-                                className="gap-2 bg-emerald-500 text-black hover:bg-emerald-400"
-                                onClick={handleFundCard}
-                                disabled={isFunding || !isCurrentUserOwner}
-                            >
-                                <IconWallet size={16} />
-                                {!isCurrentUserOwner ? 'Owner only' : isFunding ? 'Adding...' : 'Add funds'}
-                            </Button>
+            {/* Private balance */}
+            <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
+                <div className='flex items-center justify-between'>
+                    <div>
+                        <div className='flex items-center gap-2'>
+                            <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Private balance</p>
+                            {(isDecrypting || isDecryptInProgress) && (
+                                <span className='rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary'>
+                                    Decrypting...
+                                </span>
+                            )}
                         </div>
+                        <p className='text-xl font-bold tracking-tight text-foreground'>{formattedBalance}</p>
                     </div>
+                    <Button
+                        size='sm'
+                        variant='outline'
+                        className='gap-2 rounded-full border-border/60 text-foreground hover:bg-muted'
+                        onClick={handleDecryptBalance}
+                        disabled={isDecrypting || isDecryptInProgress || !isCurrentUserOwner}
+                    >
+                        <IconEye size={16} />
+                        {!isCurrentUserOwner ? 'Owner only' : isDecrypting || isDecryptInProgress ? 'Decrypting...' : 'Decrypt'}
+                    </Button>
+                </div>
+            </div>
 
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                        <Button
-                            variant={showSendForm ? 'default' : 'secondary'}
-                            className="mb-3 gap-2"
-                            onClick={() => setShowSendForm(!showSendForm)}
-                            disabled={!isCurrentUserOwner}
-                        >
-                            <IconSend size={16} />
-                            {!isCurrentUserOwner ? 'Owner only' : showSendForm ? 'Hide send form' : 'Send money'}
-                        </Button>
-                    </div>
-                </CardContent>
-            </Card>
+            {/* Add funds */}
+            <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
+                <p className='text-[11px] uppercase tracking-wide text-muted-foreground mb-2'>Add funds</p>
+                <div className='flex flex-col gap-2 md:flex-row'>
+                    <input
+                        type='number'
+                        min='0'
+                        step='0.000001'
+                        placeholder={`Amount in ${underlyingTokenSymbol || 'token'}`}
+                        className='h-10 flex-1 rounded-lg border border-border/60 bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30'
+                        value={fundAmount}
+                        onChange={(e) => setFundAmount(e.target.value)}
+                    />
+                    <Button
+                        variant='outline'
+                        className='gap-2 rounded-full border-border/60 text-foreground hover:bg-muted'
+                        onClick={handleFundCard}
+                        disabled={isFunding || !isCurrentUserOwner}
+                    >
+                        <IconWallet size={16} />
+                        {!isCurrentUserOwner ? 'Owner only' : isFunding ? 'Adding...' : 'Add funds'}
+                    </Button>
+                </div>
+            </div>
+
+            {/* Send money toggle */}
+            <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
+                <Button
+                    variant='outline'
+                    className='gap-2 rounded-full border-border/60 text-foreground hover:bg-muted'
+                    onClick={() => setShowSendForm(!showSendForm)}
+                    disabled={!isCurrentUserOwner}
+                >
+                    <IconSend size={16} />
+                    {!isCurrentUserOwner ? 'Owner only' : showSendForm ? 'Hide send form' : 'Send money'}
+                </Button>
+            </div>
 
             {/* Confidential Send Form */}
             {showSendForm && (
-                <Card className="animate-in slide-in-from-top-4 duration-300 border-white/10 bg-gradient-to-br from-slate-900 to-slate-950 text-white">
-                    <div className="space-y-4 p-4 md:p-5">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-base font-bold md:text-lg">Send money</h3>
+                <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-6 animate-in fade-in duration-300 space-y-4'>
+                    <h3 className='text-lg font-semibold'>Send money</h3>
+                    <div className='grid gap-4 md:grid-cols-2'>
+                        <div className='space-y-1.5'>
+                            <label className='text-[11px] uppercase tracking-wide text-muted-foreground'>Recipient Address</label>
+                            <input
+                                type='text'
+                                placeholder='0x...'
+                                className='h-10 w-full rounded-lg border border-border/60 bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30'
+                                value={sendTo}
+                                onChange={(e) => setSendTo(e.target.value)}
+                            />
                         </div>
-                        <div className="grid gap-4 md:grid-cols-2">
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Recipient Address</label>
-                                <input
-                                    type="text"
-                                    placeholder="0x..."
-                                    className="h-10 w-full rounded-lg border border-white/15 bg-black/20 px-3 text-sm text-white placeholder:text-slate-400"
-                                    value={sendTo}
-                                    onChange={(e) => setSendTo(e.target.value)}
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold uppercase tracking-tight text-slate-400">Amount</label>
-                                <input
-                                    type="number"
-                                    placeholder="0.00"
-                                    className="h-10 w-full rounded-lg border border-white/15 bg-black/20 px-3 text-sm text-white placeholder:text-slate-400"
-                                    value={sendAmount}
-                                    onChange={(e) => setSendAmount(e.target.value)}
-                                />
-                            </div>
+                        <div className='space-y-1.5'>
+                            <label className='text-[11px] uppercase tracking-wide text-muted-foreground'>Amount</label>
+                            <input
+                                type='number'
+                                placeholder='0.00'
+                                className='h-10 w-full rounded-lg border border-border/60 bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30'
+                                value={sendAmount}
+                                onChange={(e) => setSendAmount(e.target.value)}
+                            />
                         </div>
-                        <Button
-                            className="h-11 w-full bg-primary font-bold text-black hover:bg-primary/90"
-                            onClick={handleSendConfidential}
-                            disabled={isSending || !sendTo || !sendAmount || !isCurrentUserOwner}
-                        >
-                            {isSending ? (
-                                <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                            ) : (
-                                'Send money'
-                            )}
-                        </Button>
                     </div>
-                </Card>
+                    <Button
+                        className='h-10 w-full rounded-lg font-medium bg-primary text-primary-foreground hover:bg-primary/90'
+                        onClick={handleSendConfidential}
+                        disabled={isSending || !sendTo || !sendAmount || !isCurrentUserOwner}
+                    >
+                        {isSending ? (
+                            <span className='h-5 w-5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent' />
+                        ) : (
+                            'Send money'
+                        )}
+                    </Button>
+                </div>
             )}
         </div>
     );
