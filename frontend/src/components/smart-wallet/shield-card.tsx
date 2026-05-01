@@ -13,7 +13,7 @@ import { useFHEDecrypt, useInMemoryStorage } from '@/lib/fhevm-sdk/react';
 import { Button } from '@/components/ui/button';
 import { CryptoInput } from '@/components/ui/crypto-input';
 import { Switch } from '@/components/ui/switch';
-import { AlertCircle, ArrowRightLeft, Loader2, Clock } from 'lucide-react';
+import { AlertCircle, ArrowRightLeft, Loader2, Clock, CheckCircle2 } from 'lucide-react';
 import { encodeFunctionData, Hex, parseUnits, toHex, bytesToHex, isAddress } from 'viem';
 import { describeExecutionRevertReason } from '@/lib/smart-wallet/revert-decode';
 import { toast } from 'sonner';
@@ -114,6 +114,8 @@ export function ShieldCard({ me }: { me: Me }) {
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<string | null>(null);
   const [pendingUnwrap, setPendingUnwrap] = useState<PendingUnwrap | null>(null);
+  const [successTxHash, setSuccessTxHash] = useState<string | null>(null);
+  const [lastMode, setLastMode] = useState<'shield' | 'unshield'>('shield');
   const [serverSignerAddress, setServerSignerAddress] = useState<Hex | undefined>(undefined);
 
   useEffect(() => {
@@ -300,6 +302,13 @@ export function ShieldCard({ me }: { me: Me }) {
 
       clearPendingUnwrap();
       await refetchBalance();
+      
+      const txHash = receipt.receipt?.transactionHash as string | undefined;
+      if (txHash) {
+        setLastMode('unshield');
+        setSuccessTxHash(txHash);
+      }
+      
       toast.success(`${pendingUnwrap.amount} USDC received!`);
     } catch (err: any) {
       console.error('Finalize error:', err);
@@ -433,6 +442,13 @@ export function ShieldCard({ me }: { me: Me }) {
           throw new Error('Wrap reverted');
         }
 
+        const txHash = wrapReceipt.receipt?.transactionHash as string | undefined;
+        if (!txHash) {
+          throw new Error('Transaction confirmed but transaction hash is missing in receipt.');
+        }
+
+        setLastMode('shield');
+        setSuccessTxHash(txHash);
         toast.success(`Successfully shielded ${amount} USDC → cUSDC`);
       } else {
         if (!instance) {
@@ -608,7 +624,11 @@ export function ShieldCard({ me }: { me: Me }) {
         </div>
         <Switch
           checked={isShielding}
-          onCheckedChange={setIsShielding}
+          onCheckedChange={(val) => {
+            setIsShielding(val);
+            setSuccessTxHash(null);
+            setAmount('');
+          }}
           className='data-[state=checked]:bg-primary'
         />
       </div>
@@ -626,7 +646,7 @@ export function ShieldCard({ me }: { me: Me }) {
       </div>
 
       {/* Pending Unwrap Banner */}
-      {pendingUnwrap && (
+      {pendingUnwrap && !successTxHash && (
         <div className='rounded-xl bg-amber-500/10 border border-amber-500/30 p-4 space-y-3'>
           <div className='flex items-center justify-between'>
             <div className='flex items-center gap-2'>
@@ -673,8 +693,39 @@ export function ShieldCard({ me }: { me: Me }) {
         </div>
       )}
 
+      {/* Success State */}
+      {successTxHash && (
+        <div className='flex flex-col items-center gap-3 py-6 text-center'>
+          <div className='flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10'>
+            <CheckCircle2 className='h-6 w-6 text-emerald-500' />
+          </div>
+          <p className='text-sm font-medium text-foreground'>
+            {lastMode === 'shield' ? 'Shield Successful' : 'Unshield Successful'}
+          </p>
+          <a
+            href={`${CHAIN.blockExplorers?.default.url}/tx/${successTxHash}`}
+            target='_blank'
+            rel='noopener noreferrer'
+            className='text-xs text-primary underline underline-offset-2 hover:no-underline'
+          >
+            View on explorer
+          </a>
+          <Button
+            variant='outline'
+            size='sm'
+            className='rounded-full mt-2'
+            onClick={() => {
+              setSuccessTxHash(null);
+              setAmount('');
+            }}
+          >
+            {lastMode === 'shield' ? 'Shield Again' : 'Unshield Again'}
+          </Button>
+        </div>
+      )}
+
       {/* Amount */}
-      {!pendingUnwrap && (
+      {!pendingUnwrap && !successTxHash && (
         <div className='space-y-1.5'>
           <label className='text-xs font-medium text-muted-foreground'>
             Amount
@@ -719,7 +770,7 @@ export function ShieldCard({ me }: { me: Me }) {
       )}
 
       {/* Submit */}
-      {!pendingUnwrap && (
+      {!pendingUnwrap && !successTxHash && (
         <Button
           type='submit'
           disabled={isSubmitting || !amount}
