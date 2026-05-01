@@ -87,32 +87,57 @@ function withGasFloors(
 function sanitizeErrorMessage(raw: string): string {
   const lower = raw.toLowerCase();
   
+  // Network/timeout errors - these are common and should be clear
   if (lower.includes('timed out') || lower.includes('took too long') || lower.includes('timeout')) {
     return 'Network request timed out. Please check your connection and try again.';
   }
-  if (lower.includes('insufficient') && (lower.includes('balance') || lower.includes('fund'))) {
-    return 'Insufficient balance for this operation.';
-  }
+  
+  // User cancelled
   if (lower.includes('user rejected') || lower.includes('user denied')) {
     return 'Transaction was cancelled.';
   }
-  if (lower.includes('revert') || lower.includes('reverted')) {
+  
+  // AA-specific errors
+  if (lower.includes('aa21') || lower.includes('aa22') || lower.includes('aa23') || lower.includes('aa31')) {
+    return 'Smart wallet prefund issue. Please try again.';
+  }
+  
+  // Topup failures - preserve the original reason
+  if (lower.includes('top-up') || lower.includes('top up') || lower.includes('topup')) {
+    const reason = raw.split(/top.?up/i)[1];
+    if (reason && reason.trim().length > 0) {
+      return `Failed to fund smart wallet: ${reason.trim().slice(0, 100)}`;
+    }
+    return 'Failed to fund smart wallet. Please try again.';
+  }
+  
+  // Revert errors
+  if (lower.includes('execution reverted') || lower.includes('reverted')) {
     const revertMatch = raw.match(/revert(?:ed)?[:\s]+(.{1,80})/i);
     if (revertMatch) {
       return `Transaction reverted: ${revertMatch[1].trim()}`;
     }
     return 'Transaction reverted on chain.';
   }
-  if (lower.includes('gas') && (lower.includes('required') || lower.includes('estimate'))) {
-    return 'Gas estimation failed. Try with a higher gas limit.';
-  }
-  if (lower.includes('nonce')) {
-    return 'Nonce mismatch. Please refresh and try again.';
+  
+  // Gas estimation
+  if (lower.includes('gas estimation') || (lower.includes('gas') && lower.includes('estimate'))) {
+    return 'Gas estimation failed. Try again or contact support.';
   }
   
-  // Fallback: truncate if too long
-  if (raw.length > 120) {
-    return raw.slice(0, 120).trim() + '...';
+  // Nonce issues
+  if (lower.includes('nonce')) {
+    return 'Nonce mismatch. Please refresh the page and try again.';
+  }
+  
+  // Fallback: truncate only if extremely long, but preserve substance
+  if (raw.length > 200) {
+    // Try to extract the most meaningful part (first sentence or clause)
+    const firstSentence = raw.split(/[.!?]\s/)[0];
+    if (firstSentence && firstSentence.length > 20) {
+      return firstSentence.trim() + '...';
+    }
+    return raw.slice(0, 200).trim() + '...';
   }
   
   return raw;
@@ -146,6 +171,7 @@ export function ShieldCard({ me }: { me: Me }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rawError, setRawError] = useState<string | null>(null);
   const [step, setStep] = useState<string | null>(null);
   const [pendingUnwrap, setPendingUnwrap] = useState<PendingUnwrap | null>(null);
   const [successTxHash, setSuccessTxHash] = useState<string | null>(null);
@@ -279,6 +305,7 @@ export function ShieldCard({ me }: { me: Me }) {
     setIsFinalizing(true);
     setStep('finalize');
     setError(null);
+    setRawError(null);
 
     try {
       smartWallet.init();
@@ -346,8 +373,10 @@ export function ShieldCard({ me }: { me: Me }) {
       toast.success(`${pendingUnwrap.amount} USDC received!`);
     } catch (err: any) {
       console.error('Finalize error:', err);
-      const friendly = sanitizeErrorMessage(err.message || 'Finalize failed');
+      const rawMsg = err.message || 'Finalize failed';
+      const friendly = sanitizeErrorMessage(rawMsg);
       setError(friendly);
+      setRawError(rawMsg !== friendly ? rawMsg : null);
       toast.error(friendly);
     } finally {
       setIsFinalizing(false);
@@ -358,6 +387,7 @@ export function ShieldCard({ me }: { me: Me }) {
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setRawError(null);
     setStep(null);
 
     if (!amount || Number(amount) <= 0) {
@@ -484,6 +514,8 @@ export function ShieldCard({ me }: { me: Me }) {
 
         setLastMode('shield');
         setSuccessTxHash(txHash);
+        setError(null);
+        setRawError(null);
         toast.success(`Successfully shielded ${amount} USDC → cUSDC`);
       } else {
         if (!instance) {
@@ -635,8 +667,10 @@ export function ShieldCard({ me }: { me: Me }) {
         setAmount('');
       }
     } catch (err: any) {
-      const friendly = sanitizeErrorMessage(err.message || 'Transaction failed');
+      const rawMsg = err.message || 'Transaction failed';
+      const friendly = sanitizeErrorMessage(rawMsg);
       setError(friendly);
+      setRawError(rawMsg !== friendly ? rawMsg : null);
       toast.error(friendly);
     } finally {
       setIsSubmitting(false);
@@ -752,6 +786,8 @@ export function ShieldCard({ me }: { me: Me }) {
             onClick={() => {
               setSuccessTxHash(null);
               setAmount('');
+              setError(null);
+              setRawError(null);
             }}
           >
             {lastMode === 'shield' ? 'Shield Again' : 'Unshield Again'}
@@ -798,9 +834,21 @@ export function ShieldCard({ me }: { me: Me }) {
 
       {/* Error */}
       {error && (
-        <div className='flex items-start gap-2 rounded-lg bg-rose-500/10 px-3 py-2.5 text-xs text-rose-500'>
-          <AlertCircle size={14} className='shrink-0 mt-0.5' />
-          <span className='break-words leading-snug'>{error}</span>
+        <div className='space-y-2'>
+          <div className='flex items-start gap-2 rounded-lg bg-rose-500/10 px-3 py-2.5 text-xs text-rose-500'>
+            <AlertCircle size={14} className='shrink-0 mt-0.5' />
+            <span className='break-words leading-snug flex-1'>{error}</span>
+          </div>
+          {rawError && (
+            <details className='rounded-lg bg-muted/30 border border-border/60 text-[11px]'>
+              <summary className='cursor-pointer px-3 py-2 text-muted-foreground hover:text-foreground transition-colors'>
+                View full error details
+              </summary>
+              <pre className='px-3 pb-2 pt-0 overflow-x-auto text-rose-400 whitespace-pre-wrap break-all max-h-32 overflow-y-auto'>
+                {rawError}
+              </pre>
+            </details>
+          )}
         </div>
       )}
 
