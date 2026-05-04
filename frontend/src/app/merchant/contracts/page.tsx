@@ -7,6 +7,8 @@ import { Address, isAddress } from 'viem';
 import { toast } from 'sonner';
 import { BadgeCheck, ShieldCheck, Search, Clock3, Wallet } from 'lucide-react';
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 type VerificationResult = {
   cardAddress: Address;
@@ -92,20 +94,21 @@ export default function MerchantContractsPage() {
     : '-';
 
   return (
-    <div className='flex-1 space-y-6 p-8 pt-6'>
-      <div className='space-y-2'>
-        <h2 className='text-3xl font-bold tracking-tight'>Contract Controls</h2>
+    <div className='flex-1 space-y-4 p-6'>
+      <div className='max-w-3xl space-y-1'>
+        <h2 className='text-2xl font-semibold tracking-tight text-foreground'>Contract Controls</h2>
         <p className='text-sm text-muted-foreground'>
           Verify card ownership and subscription permission state before triggering billing operations.
         </p>
       </div>
+      <div className='max-w-3xl h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
 
-      <div className='rounded-xl border bg-card p-4'>
-        <p className='text-xs uppercase tracking-wide text-muted-foreground'>Active Merchant Account</p>
+      <div className='max-w-3xl rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5'>
+        <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Active Merchant Account</p>
         <p className='mt-2 font-mono text-xs break-all'>{me?.account || 'Not connected'}</p>
       </div>
 
-      <div className='rounded-xl border bg-card text-card-foreground shadow'>
+      <div className='max-w-3xl rounded-xl border border-border/60 bg-card/50 backdrop-blur'>
         <div className='p-6 pb-2'>
           <h3 className='font-semibold leading-none tracking-tight'>Verify Customer Card Subscription</h3>
           <p className='mt-2 text-sm text-muted-foreground'>
@@ -116,10 +119,9 @@ export default function MerchantContractsPage() {
         <div className='p-6 pt-4 space-y-4'>
           <div className='space-y-2'>
             <label className='text-sm font-medium'>Customer Private Card Address</label>
-            <input
+            <Input
               value={customerCard}
               onChange={(e) => setCustomerCard(e.target.value.trim())}
-              className='w-full rounded-md border bg-transparent px-3 py-2 text-sm'
               placeholder='0x...'
               autoComplete='off'
               spellCheck={false}
@@ -129,20 +131,20 @@ export default function MerchantContractsPage() {
             )}
           </div>
 
-          <button
+          <Button
             onClick={runVerification}
             disabled={loading || !customerCard || !isCardAddressValid}
-            className='inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50'
+            className='gap-2'
           >
-            <Search className='mr-2 h-4 w-4' />
+            <Search className='h-4 w-4' />
             {loading ? 'Verifying...' : 'Verify On-Chain'}
-          </button>
+          </Button>
         </div>
       </div>
 
       {result && (
-        <div className='grid gap-6 md:grid-cols-2'>
-          <div className='rounded-xl border bg-card text-card-foreground shadow'>
+        <div className='max-w-3xl grid gap-6 md:grid-cols-2'>
+          <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur'>
             <div className='p-6 space-y-4'>
               <h3 className='font-semibold leading-none tracking-tight'>Card Metadata</h3>
               <div className='space-y-3 text-sm'>
@@ -162,7 +164,7 @@ export default function MerchantContractsPage() {
             </div>
           </div>
 
-          <div className='rounded-xl border bg-card text-card-foreground shadow'>
+          <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur'>
             <div className='p-6 space-y-4'>
               <h3 className='font-semibold leading-none tracking-tight'>Subscription State</h3>
 
@@ -185,7 +187,7 @@ export default function MerchantContractsPage() {
                   <span className='text-muted-foreground inline-flex items-center gap-1'>
                     <Clock3 className='h-4 w-4' /> Period (seconds)
                   </span>
-                  <span className='font-mono'>{result.periodSeconds.toString()}</span>
+                  <span className='font-mono tabular-nums'>{result.periodSeconds.toString()}</span>
                 </div>
                 <div className='flex items-center justify-between gap-4'>
                   <span className='text-muted-foreground'>Last Reset</span>
@@ -209,13 +211,13 @@ export default function MerchantContractsPage() {
               <div className='flex flex-wrap gap-2 pt-2'>
                 <Link
                   href='/merchant/customers'
-                  className='inline-flex items-center rounded-md border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted'
+                  className='inline-flex items-center rounded-md border border-border/60 bg-background/50 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted/40'
                 >
                   Open Customers
                 </Link>
                 <Link
                   href='/merchant/billing-cycles'
-                  className='inline-flex items-center rounded-md border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted'
+                  className='inline-flex items-center rounded-md border border-border/60 bg-background/50 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted/40'
                 >
                   Open Billing Cycles
                 </Link>

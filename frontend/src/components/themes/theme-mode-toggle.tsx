@@ -22,11 +22,13 @@ export function ThemeModeToggle() {
 
   if (!mounted) {
     return (
-      <Button variant='secondary' size='icon' className='size-8'>
-        <IconBrightness />
+      <Button variant='ghost' size='icon' className='h-8 w-8 rounded-lg text-muted-foreground'>
+        <IconBrightness size={16} />
       </Button>
     );
   }
+
+  const currentIcon = theme === 'light' ? IconSun : theme === 'dark' ? IconMoon : IconDeviceDesktop;
 
   const options = [
     { value: 'light', label: 'Light', icon: IconSun },
@@ -37,8 +39,8 @@ export function ThemeModeToggle() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant='secondary' size='icon' className='size-8'>
-          <IconBrightness />
+        <Button variant='ghost' size='icon' className='h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground'>
+          {React.createElement(currentIcon, { size: 16 })}
           <span className='sr-only'>Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>

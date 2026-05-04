@@ -5,6 +5,9 @@ import { toast } from 'sonner';
 import { useMe } from '@/providers/auth-provider';
 import { useMerchantControlPlane } from '@/hooks/use-merchant-control-plane';
 import { FailureClassBadge, SubscriptionStatusBadge } from '@/components/merchant/status-badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { TerminalFailureStatus } from '@/lib/merchant/types';
 
 function shortAddress(address: string) {
@@ -55,91 +58,86 @@ export default function MerchantRecoveryPage() {
   };
 
   return (
-    <div className='flex-1 space-y-6 p-8 pt-6'>
-      <div className='space-y-2'>
-        <h2 className='text-3xl font-bold tracking-tight'>Recovery</h2>
+    <div className='flex-1 space-y-4 p-6'>
+      <div className='max-w-3xl space-y-1'>
+        <h2 className='text-2xl font-semibold tracking-tight text-foreground'>Recovery</h2>
         <p className='text-sm text-muted-foreground'>
           Stripe-style dunning and retry operations for failed subscription collection.
         </p>
       </div>
+      <div className='max-w-3xl h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
 
-      <div className='grid gap-6 xl:grid-cols-[1fr_1.5fr]'>
-        <div className='rounded-xl border bg-card p-6 shadow-sm'>
+      <div className='max-w-3xl grid gap-6 xl:grid-cols-[1fr_1.5fr]'>
+        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-6'>
           <h3 className='font-semibold'>Retry Policy</h3>
           <p className='mt-1 text-sm text-muted-foreground'>Controls automatic scheduling and terminal behavior after failure exhaustion.</p>
 
           <div className='mt-4 space-y-4'>
             <div className='space-y-2'>
               <label className='text-sm font-medium'>Max Attempts</label>
-              <input
+              <Input
                 type='number'
                 min='1'
                 max='20'
                 value={maxAttempts}
                 onChange={(event) => setMaxAttempts(event.target.value)}
-                className='h-10 w-full rounded-md border bg-background px-3 text-sm'
               />
             </div>
             <div className='space-y-2'>
               <label className='text-sm font-medium'>Retry Windows (minutes, comma-separated)</label>
-              <input
+              <Input
                 value={windowsInput}
                 onChange={(event) => setWindowsInput(event.target.value)}
-                className='h-10 w-full rounded-md border bg-background px-3 text-sm'
                 placeholder='10,60,360,1440,4320'
               />
             </div>
             <div className='space-y-2'>
               <label className='text-sm font-medium'>Terminal Status on Exhausted</label>
-              <select
-                value={terminalStatus}
-                onChange={(event) => setTerminalStatus(event.target.value as TerminalFailureStatus)}
-                className='h-10 w-full rounded-md border bg-background px-3 text-sm'
-              >
-                <option value='unpaid'>unpaid</option>
-                <option value='canceled'>canceled</option>
-                <option value='past_due'>past_due</option>
-              </select>
+              <Select value={terminalStatus} onValueChange={(value) => setTerminalStatus(value as TerminalFailureStatus)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='unpaid'>unpaid</SelectItem>
+                  <SelectItem value='canceled'>canceled</SelectItem>
+                  <SelectItem value='past_due'>past_due</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <button
-              onClick={handleSavePolicy}
-              className='inline-flex h-10 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90'
-            >
-              Save Policy
-            </button>
+            <Button onClick={handleSavePolicy}>Save Policy</Button>
           </div>
         </div>
 
-        <div className='rounded-xl border bg-card p-6 shadow-sm'>
+        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-6'>
           <h3 className='font-semibold'>Recovery Queue</h3>
           <p className='mt-1 text-sm text-muted-foreground'>
             Prioritized cycles grouped by failure type for faster triage.
           </p>
 
-          <div className='mt-4 grid gap-4 md:grid-cols-3'>
-            <div className='rounded-lg border bg-background p-3'>
-              <p className='text-xs uppercase tracking-wide text-muted-foreground'>Needs Customer Action</p>
-              <p className='mt-2 text-2xl font-semibold text-amber-600'>{segmentedQueue.requires_customer_action.length}</p>
+          <div className='mt-4 grid gap-3 md:grid-cols-3'>
+            <div className='rounded-lg border border-border/40 bg-background/50 p-4'>
+              <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Needs Customer Action</p>
+              <p className='mt-2 text-2xl font-semibold tabular-nums text-amber-600'>{segmentedQueue.requires_customer_action.length}</p>
             </div>
-            <div className='rounded-lg border bg-background p-3'>
-              <p className='text-xs uppercase tracking-wide text-muted-foreground'>Recoverable Transient</p>
-              <p className='mt-2 text-2xl font-semibold text-sky-600'>{segmentedQueue.recoverable_transient.length}</p>
+            <div className='rounded-lg border border-border/40 bg-background/50 p-4'>
+              <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Recoverable Transient</p>
+              <p className='mt-2 text-2xl font-semibold tabular-nums text-sky-600'>{segmentedQueue.recoverable_transient.length}</p>
             </div>
-            <div className='rounded-lg border bg-background p-3'>
-              <p className='text-xs uppercase tracking-wide text-muted-foreground'>Hard Failure</p>
-              <p className='mt-2 text-2xl font-semibold text-rose-600'>{segmentedQueue.hard_failure.length}</p>
+            <div className='rounded-lg border border-border/40 bg-background/50 p-4'>
+              <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Hard Failure</p>
+              <p className='mt-2 text-2xl font-semibold tabular-nums text-rose-600'>{segmentedQueue.hard_failure.length}</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className='rounded-xl border bg-card shadow-sm'>
-        <div className='p-4'>
+      <div className='max-w-3xl rounded-xl border border-border/60 bg-card/50 backdrop-blur overflow-hidden'>
+        <div className='p-4 border-b border-border/40'>
           <h3 className='font-semibold'>Queue Items</h3>
         </div>
         <div className='overflow-x-auto'>
           <table className='w-full text-sm'>
-            <thead className='border-y bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground'>
+            <thead className='border-b border-border/40 bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground'>
               <tr>
                 <th className='px-4 py-3 font-medium'>Customer</th>
                 <th className='px-4 py-3 font-medium'>Subscription Status</th>
@@ -149,7 +147,7 @@ export default function MerchantRecoveryPage() {
                 <th className='px-4 py-3 font-medium'>Actions</th>
               </tr>
             </thead>
-            <tbody className='divide-y'>
+            <tbody className='divide-y divide-border/30'>
               {recoveryQueue.length === 0 ? (
                 <tr>
                   <td className='px-4 py-8 text-center text-muted-foreground' colSpan={6}>
@@ -172,24 +170,26 @@ export default function MerchantRecoveryPage() {
                     </td>
                     <td className='px-4 py-3'>
                       <div className='flex gap-2'>
-                        <button
+                        <Button
+                          size='sm'
+                          variant='outline'
                           onClick={() => {
                             requestCycleRetry(item.cycle.id);
                             toast.success('Retry requested');
                           }}
-                          className='inline-flex h-8 items-center rounded-md border bg-background px-3 text-xs font-medium hover:bg-muted'
                         >
                           Retry Now
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          size='sm'
+                          variant='destructive'
                           onClick={() => {
                             setCycleUncollectible(item.cycle.id);
                             toast.success('Cycle marked uncollectible');
                           }}
-                          className='inline-flex h-8 items-center rounded-md bg-destructive px-3 text-xs font-medium text-destructive-foreground hover:opacity-90'
                         >
                           Mark Uncollectible
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>

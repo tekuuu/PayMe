@@ -39,18 +39,18 @@ export const personalNavItems: NavItem[] = [
 export const merchantNavItems: NavItem[] = [
   {
     title: 'Dashboard',
-    url: '/dashboard',
+    url: '/merchant',
     icon: 'dashboard',
     isActive: false,
     shortcut: ['d', 'b'],
     items: []
   },
   {
-    title: 'My Card',
-    url: '/dashboard/my-card',
-    icon: 'card',
+    title: 'Plans',
+    url: '/merchant/plans',
+    icon: 'workspace',
     isActive: false,
-    shortcut: ['m', 'c'],
+    shortcut: ['m', 'p'],
     items: []
   },
   {
@@ -75,22 +75,6 @@ export const merchantNavItems: NavItem[] = [
     icon: 'warning',
     isActive: false,
     shortcut: ['m', 'r'],
-    items: []
-  },
-  {
-    title: 'Customers',
-    url: '/merchant/customers',
-    icon: 'teams',
-    isActive: false,
-    shortcut: ['m', 'c'],
-    items: []
-  },
-  {
-    title: 'Payouts',
-    url: '/merchant/payouts',
-    icon: 'receive',
-    isActive: false,
-    shortcut: ['m', 'p'],
     items: []
   },
   {

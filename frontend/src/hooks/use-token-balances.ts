@@ -37,7 +37,7 @@ const ENTRYPOINT_READ_ABI = [
 ] as const;
 
 export function useTokenBalances(address?: string) {
-  const { data: ethBalance, isError: ethError } = useBalance({
+  const { data: ethBalance, refetch: refetchEth, isError: ethError } = useBalance({
     address: address as `0x${string}`,
     chainId: CHAIN.id,
     query: {
@@ -45,7 +45,7 @@ export function useTokenBalances(address?: string) {
     }
   });
 
-  const { data: fallbackEthBalance } = useQuery({
+  const { data: fallbackEthBalance, refetch: refetchFallbackEth } = useQuery({
     queryKey: ['native-balance', address],
     queryFn: async () => {
       return await PUBLIC_CLIENT.getBalance({ address: address as `0x${string}` });
@@ -54,7 +54,7 @@ export function useTokenBalances(address?: string) {
     refetchInterval: 15_000,
   });
 
-  const { data: entryPointDeposit, isError: entryPointDepositError } = useReadContract({
+  const { data: entryPointDeposit, refetch: refetchEntryPoint, isError: entryPointDepositError } = useReadContract({
     address: ENTRYPOINT_ADDRESS,
     abi: ENTRYPOINT_READ_ABI,
     functionName: 'balanceOf',
@@ -65,7 +65,7 @@ export function useTokenBalances(address?: string) {
     },
   });
 
-  const { data: usdcBalance, isError: usdcError } = useReadContract({
+  const { data: usdcBalance, refetch: refetchUsdc, isError: usdcError } = useReadContract({
     address: USDC_ADDRESS as `0x${string}`,
     abi: ERC20_ABI,
     functionName: 'balanceOf',
@@ -76,7 +76,7 @@ export function useTokenBalances(address?: string) {
     }
   });
 
-  const { data: wethBalance, isError: wethError } = useReadContract({
+  const { data: wethBalance, refetch: refetchWeth, isError: wethError } = useReadContract({
     address: WETH_ADDRESS as `0x${string}`,
     abi: ERC20_ABI,
     functionName: 'balanceOf',
@@ -119,6 +119,15 @@ export function useTokenBalances(address?: string) {
       balance: wethBalance,
       formatted: wethBalance && !wethError ? formatBalance(wethBalance as bigint, 18) : '0.00',
       symbol: 'WETH',
+    },
+    refetch: async () => {
+      await Promise.all([
+        refetchEth(),
+        refetchFallbackEth(),
+        refetchEntryPoint(),
+        refetchUsdc(),
+        refetchWeth(),
+      ]);
     },
   };
 }

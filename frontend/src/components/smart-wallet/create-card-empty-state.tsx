@@ -30,14 +30,7 @@ export function CreateCardEmptyState({ onCreate, isCreating }: { onCreate: () =>
             </div>
 
             <div className="space-y-4 max-w-md">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold uppercase tracking-wider mb-2">
-                    <IconSparkles size={14} /> FHE Encrypted
-                </div>
                 <h2 className="text-3xl font-extrabold tracking-tight">Activate Your Private Card</h2>
-                <p className="text-muted-foreground text-sm">
-                    Create a zero-knowledge virtual card controlled exclusively by your Passkey Smart Wallet.
-                    Balances and transactions remain confidentially encrypted on-chain.
-                </p>
             </div>
 
             <Button

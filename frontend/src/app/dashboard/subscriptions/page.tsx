@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { encodeFunctionData, getAddress, Hex, parseUnits, toHex } from 'viem';
-import { Loader2, ShieldCheck, XCircle } from 'lucide-react';
+import { Copy, Search, ChevronDown, ChevronUp, Wallet, CreditCard, Calendar, DollarSign, AlertCircle, XCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import PageContainer from '@/components/layout/page-container';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ import {
   setSubscriptionCancelAtPeriodEnd,
   updateSubscriptionAllowance,
 } from '@/lib/merchant/control-plane-store';
+import type { SubscriptionStatus } from '@/lib/merchant/types';
 
 function shortAddress(address: string) {
   if (!address) return '-';
@@ -52,6 +53,11 @@ type MySubscriptionRow = {
   maxAllowanceRefMicros: string;
 };
 
+function copyText(text: string, label: string) {
+  navigator.clipboard.writeText(text);
+  toast.success(`${label} copied`);
+}
+
 function formatUserOpExecutionError(receipt: any, fallback: string) {
   const rawReason =
     receipt?.receipt?.revertReason ||
@@ -67,6 +73,151 @@ function formatUserOpExecutionError(receipt: any, fallback: string) {
   return fallback;
 }
 
+function SubscriptionCard({
+  row,
+  onUpdateAllowance,
+  onCancelAtPeriodEnd,
+  onCancelNow,
+  isSubmitting,
+}: {
+  row: MySubscriptionRow;
+  onUpdateAllowance: () => void;
+  onCancelAtPeriodEnd: (enabled: boolean) => void;
+  onCancelNow: () => void;
+  isSubmitting: boolean;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const [showConfirmDialog, setShowConfirmDialog] = useState<'cancel-period' | 'cancel-now' | null>(null);
+  const isCanceled = row.status === 'canceled';
+  const seconds = row.periodSeconds || 30 * 86400;
+  const days = Math.round(seconds / 86400);
+
+  const handleConfirmPeriod = () => {
+    onCancelAtPeriodEnd(!row.cancelAtPeriodEnd);
+    setShowConfirmDialog(null);
+  };
+
+  const handleConfirmNow = () => {
+    onCancelNow();
+    setShowConfirmDialog(null);
+  };
+
+  return (
+    <div className={`rounded-xl border border-border/60 bg-card/50 backdrop-blur overflow-hidden transition-all hover:border-border/80 ${isCanceled ? 'opacity-70' : ''}`}>
+      <div className='px-5 py-4'>
+        <div className='flex items-center justify-between gap-4'>
+          <div className='flex items-center gap-3'>
+            <SubscriptionStatusBadge status={row.status as SubscriptionStatus} />
+            {row.cancelAtPeriodEnd && (
+              <span className='inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-600'>
+                <AlertCircle className='h-3 w-3' />
+                Cancels at period end
+              </span>
+            )}
+            <div>
+              <h3 className='text-base font-semibold text-foreground'>{row.planName}</h3>
+              <p className='text-xs text-muted-foreground capitalize'>{row.planInterval} · {days} days</p>
+            </div>
+          </div>
+
+          <div className='text-right'>
+            <p className='text-2xl font-bold text-foreground tabular-nums'>
+              ${formatMicrosToCurrency(row.maxAllowanceRefMicros)}
+            </p>
+            <p className='text-xs text-muted-foreground'>max per period</p>
+          </div>
+        </div>
+      </div>
+
+      <div className='flex items-center gap-2 px-5 py-3 border-t border-border/30 bg-muted/10'>
+        <div className='flex items-center gap-1.5 text-xs text-muted-foreground'>
+          <Wallet className='h-3.5 w-3.5' />
+          <span className='font-mono'>{shortAddress(row.merchantAddress)}</span>
+          <button onClick={() => copyText(row.merchantAddress, 'Merchant')} className='p-0.5 text-muted-foreground/60 hover:text-foreground'>
+            <Copy size={12} />
+          </button>
+        </div>
+        <span className='text-muted-foreground/30'>·</span>
+        <div className='flex items-center gap-1.5 text-xs text-muted-foreground ml-auto'>
+          <Calendar className='h-3.5 w-3.5' />
+          <span>Next: {new Date(row.nextChargeAt).toLocaleDateString()}</span>
+        </div>
+        <button onClick={() => setExpanded(!expanded)} className='ml-2 rounded-md p-1 text-muted-foreground hover:bg-muted/40'>
+          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+      </div>
+
+      {expanded && (
+        <div className='border-t border-border/40 bg-background/50 px-5 py-4 space-y-4'>
+          <div className='grid grid-cols-3 gap-px rounded-lg border border-border/30 bg-border/30 overflow-hidden'>
+            <div className='bg-card/60 p-3'>
+              <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>Plan</p>
+              <p className='mt-1 text-sm font-medium capitalize'>{row.planInterval}</p>
+            </div>
+            <div className='bg-card/60 p-3'>
+              <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>Cycle</p>
+              <p className='mt-1 text-sm font-medium tabular-nums'>{days} days</p>
+            </div>
+            <div className='bg-card/60 p-3'>
+              <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>Max</p>
+              <p className='mt-1 text-sm font-medium tabular-nums'>${formatMicrosToCurrency(row.maxAllowanceRefMicros)}</p>
+            </div>
+          </div>
+
+          {row.subscriptionRef && (
+            <div className='flex items-center gap-2 p-3 rounded-lg bg-muted/30 border border-border/30'>
+              <CreditCard className='h-4 w-4 text-muted-foreground shrink-0' />
+              <div>
+                <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>On-Chain Ref</p>
+                <p className='text-xs font-mono mt-0.5'>{row.subscriptionRef}</p>
+              </div>
+              <button onClick={() => copyText(row.subscriptionRef!, 'Ref')} className='ml-auto p-1 text-muted-foreground/60 hover:text-foreground'>
+                <Copy size={12} />
+              </button>
+            </div>
+          )}
+
+          <div className='flex flex-wrap gap-2 pt-2 border-t border-border/30'>
+            <Button size='sm' variant='outline' onClick={onUpdateAllowance}>Update Allowance</Button>
+            <Button size='sm' variant='secondary' onClick={() => setShowConfirmDialog('cancel-period')} disabled={isSubmitting}>
+              {row.cancelAtPeriodEnd ? 'Undo Cancel' : 'Cancel End-Period'}
+            </Button>
+            <Button size='sm' variant='destructive' onClick={() => setShowConfirmDialog('cancel-now')} disabled={isSubmitting}>
+              <XCircle className='h-3.5 w-3.5 mr-1' />Cancel Now
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {showConfirmDialog === 'cancel-period' && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50'>
+          <div className='mx-4 w-full max-w-sm rounded-xl border border-border/60 bg-card p-6'>
+            <h3 className='text-lg font-semibold'>Cancel at Period End?</h3>
+            <p className='mt-2 text-sm text-muted-foreground'>You'll stop being charged after this billing period ends.</p>
+            <div className='mt-6 flex gap-3'>
+              <Button variant='outline' className='flex-1' onClick={() => setShowConfirmDialog(null)}>Keep</Button>
+              <Button variant='destructive' className='flex-1' onClick={handleConfirmPeriod}>Confirm</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showConfirmDialog === 'cancel-now' && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50'>
+          <div className='mx-4 w-full max-w-sm rounded-xl border border-border/60 bg-card p-6'>
+            <h3 className='text-lg font-semibold text-rose-600'>Cancel Immediately?</h3>
+            <p className='mt-2 text-sm text-muted-foreground'>This will cancel your subscription right now.</p>
+            <div className='mt-6 flex gap-3'>
+              <Button variant='outline' className='flex-1' onClick={() => setShowConfirmDialog(null)}>Keep</Button>
+              <Button variant='destructive' className='flex-1' onClick={handleConfirmNow}>Confirm</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SubscriptionsPage() {
   const { me } = useMe();
   const { instance } = useFhevmContext();
@@ -80,7 +231,6 @@ export default function SubscriptionsPage() {
 
   const [revision, setRevision] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
   const [editingRow, setEditingRow] = useState<MySubscriptionRow | null>(null);
   const [newAllowance, setNewAllowance] = useState('');
 
@@ -136,8 +286,17 @@ export default function SubscriptionsPage() {
     }
 
     return result.sort((a, b) => b.nextChargeAt.localeCompare(a.nextChargeAt));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revision, selectedCardAddress]);
+
+  const stats = useMemo(() => {
+    return {
+      total: rows.length,
+      active: rows.filter((r) => r.status === 'active').length,
+      pastDue: rows.filter((r) => r.status === 'past_due').length,
+      paused: rows.filter((r) => r.status === 'paused').length,
+      canceled: rows.filter((r) => r.status === 'canceled').length,
+    };
+  }, [rows]);
 
   const openAllowanceDialog = (row: MySubscriptionRow) => {
     setEditingRow(row);
@@ -166,7 +325,6 @@ export default function SubscriptionsPage() {
     })) as Hex;
 
     const signingAccount = getAddress(cardOwner) as Hex;
-
     const amountRaw = BigInt(args.maxPerPeriodMicros);
     const encryptedInput = instance.createEncryptedInput(selectedCardAddress, signingAccount);
     encryptedInput.add64(amountRaw);
@@ -373,7 +531,7 @@ export default function SubscriptionsPage() {
       <PageContainer>
         <div className='flex flex-col items-center justify-center min-h-[60vh] space-y-6 text-center'>
           <div className='p-6 bg-primary/5 rounded-full animate-pulse'>
-            <ShieldCheck className='h-16 w-16 text-primary/40' />
+            <CreditCard className='h-16 w-16 text-primary/40' />
           </div>
           <div className='space-y-2 max-w-sm'>
             <h2 className='text-2xl font-bold tracking-tight text-foreground'>Subscriptions Locked</h2>
@@ -394,116 +552,52 @@ export default function SubscriptionsPage() {
   }
 
   return (
-    <PageContainer scrollable pageTitle='Subscriptions' pageDescription='Your approved merchant plans and encrypted allowances.'>
-      <div className='flex-1 space-y-4 pt-2 px-2 md:px-6'>
-        <div className='rounded-xl border bg-card p-4 shadow-sm'>
-          <p className='text-sm text-muted-foreground'>
-            Have a new checkout link? Open it and approve with your card. Example: <code className='rounded bg-muted px-1.5 py-0.5'>/subscribe/...</code>
-          </p>
+    <div className='flex-1 space-y-4 p-6'>
+      <div className='space-y-1'>
+        <h2 className='text-2xl font-semibold tracking-tight text-foreground'>Subscriptions</h2>
+      </div>
+      <div className='h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
+
+      <div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3'>
+        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
+          <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>Total</p>
+          <p className='mt-1 text-2xl font-bold tabular-nums'>{stats.total}</p>
         </div>
-
-        <div className='rounded-xl border bg-card shadow-sm'>
-          <div className='p-4 flex items-center justify-between gap-3'>
-            <div>
-              <h3 className='font-semibold'>My Subscriptions</h3>
-              <p className='text-xs text-muted-foreground'>This is a local UI ledger until the DB/scheduler lands.</p>
-            </div>
-            <p className='text-xs text-muted-foreground'>Card: {selectedCardAddress ? shortAddress(selectedCardAddress) : '-'}</p>
-          </div>
-
-          <div className='overflow-x-auto'>
-            <table className='w-full text-sm'>
-              <thead className='border-y bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground'>
-                <tr>
-                  <th className='px-4 py-3 font-medium'>Merchant</th>
-                  <th className='px-4 py-3 font-medium'>Plan</th>
-                  <th className='px-4 py-3 font-medium'>Status</th>
-                  <th className='px-4 py-3 font-medium'>Next Charge</th>
-                  <th className='px-4 py-3 font-medium'>Allowance</th>
-                  <th className='px-4 py-3 font-medium'>Actions</th>
-                </tr>
-              </thead>
-              <tbody className='divide-y'>
-                {rows.length === 0 ? (
-                  <tr>
-                    <td className='px-4 py-8 text-center text-muted-foreground' colSpan={6}>
-                      No subscriptions yet. Approve from a merchant checkout link.
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((row) => (
-                    <tr key={`${row.merchantAddress}:${row.subscriptionId}`} className='align-top'>
-                      <td className='px-4 py-3'>
-                        <div className='font-mono text-xs'>{shortAddress(row.merchantAddress)}</div>
-                        <div className='mt-1 text-[11px] text-muted-foreground'>{row.merchantAddress}</div>
-                      </td>
-                      <td className='px-4 py-3'>
-                        <div className='font-medium'>{row.planName}</div>
-                        <div className='mt-1 text-[11px] text-muted-foreground capitalize'>{row.planInterval}</div>
-                      </td>
-                      <td className='px-4 py-3'>
-                        <SubscriptionStatusBadge status={row.status as any} />
-                        {row.cancelAtPeriodEnd ? (
-                          <div className='mt-1 text-[11px] text-muted-foreground'>Cancel at period end</div>
-                        ) : null}
-                      </td>
-                      <td className='px-4 py-3 text-xs'>{new Date(row.nextChargeAt).toLocaleString()}</td>
-                      <td className='px-4 py-3 text-xs text-muted-foreground'>
-                        {formatMicrosToCurrency(row.maxAllowanceRefMicros)} cUSDC
-                      </td>
-                      <td className='px-4 py-3'>
-                        <div className='flex flex-wrap gap-2'>
-                          <Button size='sm' variant='outline' onClick={() => openAllowanceDialog(row)} disabled={isSubmitting}>
-                            Update Allowance
-                          </Button>
-                          {row.cancelAtPeriodEnd ? (
-                            <Button
-                              size='sm'
-                              variant='secondary'
-                              onClick={() => handleCancelAtPeriodEnd(row, false)}
-                              disabled={isSubmitting}
-                            >
-                              Undo Cancel
-                            </Button>
-                          ) : (
-                            <Button
-                              size='sm'
-                              variant='secondary'
-                              onClick={() => handleCancelAtPeriodEnd(row, true)}
-                              disabled={isSubmitting}
-                            >
-                              Cancel End-Period
-                            </Button>
-                          )}
-                          <Button
-                            size='sm'
-                            variant='destructive'
-                            className='gap-1'
-                            onClick={() => handleCancelNow(row)}
-                            disabled={isSubmitting}
-                          >
-                            <XCircle className='h-3.5 w-3.5' />
-                            Cancel Now
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className='p-4 text-xs text-muted-foreground'>
-            Merchant links live at <code className='rounded bg-muted px-1.5 py-0.5'>/subscribe/[checkoutSlug]</code>. If you need one, ask the merchant.
-          </div>
+        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
+          <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>Active</p>
+          <p className='mt-1 text-2xl font-bold tabular-nums text-emerald-600'>{stats.active}</p>
         </div>
-
-        <div className='rounded-xl border bg-card p-4 shadow-sm'>
-          <p className='text-sm text-muted-foreground'>
-            Merchant portal lives at <Link href='/merchant' className='underline'>/merchant</Link> (business wallets only).
-          </p>
+        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
+          <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>Past Due</p>
+          <p className='mt-1 text-2xl font-bold tabular-nums text-amber-600'>{stats.pastDue}</p>
         </div>
+        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
+          <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>Paused</p>
+          <p className='mt-1 text-2xl font-bold tabular-nums text-violet-600'>{stats.paused}</p>
+        </div>
+        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
+          <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>Canceled</p>
+          <p className='mt-1 text-2xl font-bold tabular-nums text-zinc-500'>{stats.canceled}</p>
+        </div>
+      </div>
+
+      <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-3'>
+        {rows.length === 0 ? (
+          <div className='col-span-full rounded-xl border border-border/60 bg-card/50 backdrop-blur p-8 text-center text-muted-foreground'>
+            No subscriptions yet. Approve from a merchant checkout link.
+          </div>
+        ) : (
+          rows.map((row) => (
+            <SubscriptionCard
+              key={`${row.merchantAddress}:${row.subscriptionId}`}
+              row={row}
+              onUpdateAllowance={() => openAllowanceDialog(row)}
+              onCancelAtPeriodEnd={(enabled) => handleCancelAtPeriodEnd(row, enabled)}
+              onCancelNow={() => handleCancelNow(row)}
+              isSubmitting={isSubmitting}
+            />
+          ))
+        )}
       </div>
 
       <Dialog open={!!editingRow} onOpenChange={(open) => (!open ? setEditingRow(null) : null)}>
@@ -536,6 +630,6 @@ export default function SubscriptionsPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </PageContainer>
+    </div>
   );
 }

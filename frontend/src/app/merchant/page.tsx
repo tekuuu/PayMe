@@ -1,31 +1,101 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Clock3, CreditCard, ShieldCheck, Users, Wallet, Folder, Loader2, Eye } from 'lucide-react';
+import { ArrowRight, Clock3, CreditCard, ShieldCheck, Users, Folder, Loader2, Eye, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { useMe } from '@/providers/auth-provider';
 import { useMerchantControlPlane } from '@/hooks/use-merchant-control-plane';
 import { formatMicrosToCurrency } from '@/lib/merchant/control-plane-store';
 import { useConfidentialTokenBalance } from '@/hooks/use-confidential-token-balance';
 import { useTokenBalances } from '@/hooks/use-token-balances';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SendTokenCard } from '@/components/smart-wallet/send-token-card';
 import { ReceiveTokenCard } from '@/components/smart-wallet/receive-token-card';
+import { ShieldCard } from '@/components/smart-wallet/shield-card';
 import type { Hex } from 'viem';
 
-function metricCard(title: string, value: string, helper: string, tone?: 'default' | 'danger' | 'warning') {
+function AssetBalanceRow({
+  label,
+  symbol,
+  balance,
+  subLabel,
+  isEncrypted,
+  children,
+  onDecrypt,
+  canDecrypt,
+  isDecrypting,
+  hasHandle,
+}: {
+  label: string;
+  symbol: string;
+  balance: string;
+  subLabel: string;
+  isEncrypted: boolean;
+  children: React.ReactNode;
+  onDecrypt?: () => void;
+  canDecrypt?: boolean;
+  isDecrypting?: boolean;
+  hasHandle?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className='border-b border-border/30 last:border-b-0'>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className='flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-muted/20'
+      >
+        <div className='flex items-center gap-3'>
+          <div className={`h-8 w-8 rounded-full flex items-center justify-center ${isEncrypted ? 'bg-primary/10' : 'bg-muted/30'}`}>
+            <span className={`text-[10px] font-bold ${isEncrypted ? 'text-primary' : 'text-muted-foreground'}`}>
+              {isEncrypted ? 'c$' : symbol.slice(0, 2)}
+            </span>
+          </div>
+          <div>
+            <div className='flex items-center gap-2'>
+              <p className='text-sm font-medium'>{label}</p>
+              {isEncrypted && (
+                <span className='rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[9px] font-medium text-primary'>FHE</span>
+              )}
+            </div>
+            <p className='text-xs text-muted-foreground'>{subLabel}</p>
+          </div>
+        </div>
+        <div className='flex items-center gap-2'>
+          <span className='text-sm font-semibold tabular-nums'>{balance}</span>
+          {isEncrypted && onDecrypt && balance === 'Encrypted' && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDecrypt(); }}
+              disabled={!canDecrypt || isDecrypting || !hasHandle}
+              className='rounded-md p-1 transition-colors hover:bg-muted/40 disabled:opacity-30'
+              title='Decrypt balance'
+            >
+              {isDecrypting ? <Loader2 size={14} className='animate-spin text-muted-foreground' /> : <Eye size={14} className='text-muted-foreground' />}
+            </button>
+          )}
+          {expanded ? <ChevronUp size={14} className='text-muted-foreground' /> : <ChevronDown size={14} className='text-muted-foreground' />}
+        </div>
+      </button>
+      {expanded && (
+        <div className='border-t border-border/30 bg-background/30 px-4 py-3'>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function metricCard(title: string, value: string, tone?: 'default' | 'danger' | 'warning') {
   const toneClass =
     tone === 'danger'
-      ? 'text-rose-600'
+      ? 'text-rose-500'
       : tone === 'warning'
-        ? 'text-amber-600'
+        ? 'text-amber-500'
         : 'text-foreground';
 
   return (
-    <div className='rounded-xl border bg-card p-5 shadow-sm'>
-      <p className='text-xs uppercase tracking-wide text-muted-foreground'>{title}</p>
+    <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5'>
+      <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>{title}</p>
       <p className={`mt-2 text-2xl font-semibold ${toneClass}`}>{value}</p>
-      <p className='mt-1 text-xs text-muted-foreground'>{helper}</p>
     </div>
   );
 }
@@ -40,7 +110,7 @@ function trimAmount(value: string, maxFractionDigits = 4) {
 
 export default function MerchantPage() {
   const { me } = useMe();
-  const { metrics, recoveryQueue, state } = useMerchantControlPlane(me?.account);
+  const { metrics, recoveryQueue } = useMerchantControlPlane(me?.account);
   const balances = useTokenBalances(me?.account);
   const {
     decryptedValue,
@@ -48,199 +118,160 @@ export default function MerchantPage() {
     canDecrypt,
     isDecrypting,
     handleHex,
-    decryptError,
-    serverSignerError,
-    usingServerSigner,
+    refetch: refetchBalance,
+    isFetching: isBalanceFetching,
   } = useConfidentialTokenBalance(me?.account as Hex | undefined);
+
+  const [activeAction, setActiveAction] = useState<string | null>(null);
 
   const mrrText = metrics ? formatMicrosToCurrency(metrics.mrrProxyMicros) : '0';
   const plainUsdcRaw = (balances.usdc.balance as bigint | undefined) ?? 0n;
   const decryptedCusdcRaw = decryptedValue ?? 0n;
   const stableVisibleRaw = plainUsdcRaw + decryptedCusdcRaw;
   const stableVisibleText = formatMicrosToCurrency(stableVisibleRaw);
-  const plainUsdcText = formatMicrosToCurrency(plainUsdcRaw);
-  const decryptedText = decryptedValue !== undefined ? formatMicrosToCurrency(decryptedValue) : null;
-  const totalBalanceHelper =
-    decryptedValue !== undefined
-      ? 'Includes plain USDC + decrypted confidential cUSDC.'
-      : 'cUSDC is still encrypted. Decrypt to include it in the total.';
-  const walletEthText = trimAmount(balances.eth.walletFormatted || '0');
-  const depositEthText = trimAmount(balances.eth.depositFormatted || '0');
-  const totalEthText = trimAmount(balances.eth.formatted || '0');
-  const wethText = trimAmount(balances.weth.formatted || '0');
 
   return (
-    <div className='flex-1 space-y-6 p-8 pt-6'>
-      <div className='space-y-2'>
-        <h2 className='text-3xl font-bold tracking-tight'>Merchant Overview</h2>
-        <p className='text-muted-foreground'>
-          Stripe-style operations for subscriptions, billing cycles, recovery, and payouts mapped to PayMe encrypted flows.
-        </p>
+    <div className='flex-1 space-y-4 p-6'>
+      {/* Header */}
+      <div className='space-y-1'>
+        <h2 className='text-2xl font-semibold tracking-tight text-foreground'>Merchant Overview</h2>
       </div>
+      <div className='h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
 
-      <div className='grid gap-4 md:grid-cols-2'>
-        <div className='rounded-xl border bg-card p-4'>
-          <p className='text-xs uppercase tracking-wide text-muted-foreground'>Merchant Smart Account</p>
-          <p className='mt-2 font-mono text-xs break-all'>{me?.account || 'Not connected'}</p>
-        </div>
-        <div className='rounded-xl border bg-card p-4'>
-          <p className='text-xs uppercase tracking-wide text-muted-foreground'>Retry Policy</p>
-          <p className='mt-2 text-sm'>
-            {state
-              ? `${state.recoveryPolicy.maxAttempts} attempts over ${state.recoveryPolicy.retryWindowsMinutes.length} windows`
-              : 'Not configured'}
-          </p>
-        </div>
-      </div>
+      {/* Treasury Overview */}
+      <div className='max-w-3xl rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+        <div className='absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/[0.04] via-transparent to-primary/[0.02] opacity-0 group-hover:opacity-100 transition-opacity duration-500' />
+        <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+        <div className='absolute top-0 bottom-0 left-0 w-px bg-gradient-to-b from-primary/15 via-transparent to-transparent rounded-l-2xl' />
+        <div className='absolute top-0 bottom-0 right-0 w-px bg-gradient-to-b from-transparent via-primary/10 to-transparent rounded-r-2xl' />
+        <div className='relative p-6 min-h-[280px] flex flex-col justify-center'>
+          {/* Refresh button */}
+          <button
+            onClick={async () => {
+              await Promise.all([
+                refetchBalance?.(),
+                balances.refetch?.(),
+              ]);
+            }}
+            disabled={isBalanceFetching}
+            className='absolute top-4 right-4 rounded-lg p-2 text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/40 disabled:opacity-40'
+            title='Refresh balances'
+          >
+            <RefreshCw size={16} className={isBalanceFetching ? 'animate-spin' : ''} />
+          </button>
 
-      <div className='rounded-2xl border bg-card p-6 shadow-sm'>
-        <div className='flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between'>
-          <div>
-            <p className='text-xs uppercase tracking-wide text-muted-foreground'>Treasury Snapshot</p>
-            <h3 className='mt-1 text-2xl font-semibold tracking-tight'>Total Visible Wallet Balance</h3>
-            <p className='mt-3 text-3xl font-bold'>{stableVisibleText} USDC</p>
-            <p className='mt-1 text-sm text-muted-foreground'>{totalBalanceHelper}</p>
-          </div>
+          <div className='space-y-6'>
+            {/* Plain Assets */}
+            <div className='space-y-2'>
+              <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Plain Assets</p>
+              <p className='text-4xl font-bold text-foreground tabular-nums'>${formatMicrosToCurrency(plainUsdcRaw)}</p>
+            </div>
 
-          <div className='flex flex-wrap items-center gap-2'>
-            <Button
-              variant='outline'
-              className='gap-2'
-              onClick={() => decryptWithAclSync()}
-              disabled={!canDecrypt || isDecrypting || !handleHex}
-            >
-              {isDecrypting ? <Loader2 className='h-4 w-4 animate-spin' /> : <Eye className='h-4 w-4' />}
-              Decrypt cUSDC
-            </Button>
-          </div>
-        </div>
-
-        {usingServerSigner && handleHex ? (
-          <div className='mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700'>
-            Decrypt performs ACL sync so the relayer signer can read the latest encrypted cUSDC handle.
-          </div>
-        ) : null}
-
-        <div className='mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
-          <div className='rounded-lg border bg-background p-4'>
-            <p className='text-xs uppercase tracking-wide text-muted-foreground'>Plain USDC</p>
-            <p className='mt-2 text-2xl font-semibold'>{plainUsdcText} USDC</p>
-            <p className='mt-1 text-xs text-muted-foreground'>Public ERC20 balance.</p>
-          </div>
-
-          <div className='rounded-lg border bg-background p-4'>
-            <p className='text-xs uppercase tracking-wide text-muted-foreground'>Confidential cUSDC</p>
-            <p className='mt-2 text-2xl font-semibold'>{decryptedText ? `${decryptedText} cUSDC` : 'Encrypted'}</p>
-            <p className='mt-1 text-xs text-muted-foreground'>Decrypt to reveal private balance.</p>
-          </div>
-
-          <div className='rounded-lg border bg-background p-4'>
-            <p className='text-xs uppercase tracking-wide text-muted-foreground'>Spendable ETH</p>
-            <p className='mt-2 text-2xl font-semibold'>{totalEthText} ETH</p>
-            <p className='mt-1 text-xs text-muted-foreground'>Wallet ETH + EntryPoint deposit.</p>
-          </div>
-
-          <div className='rounded-lg border bg-background p-4'>
-            <p className='text-xs uppercase tracking-wide text-muted-foreground'>WETH</p>
-            <p className='mt-2 text-2xl font-semibold'>{wethText} WETH</p>
-            <p className='mt-1 text-xs text-muted-foreground'>Wrapped Ether in smart wallet.</p>
-          </div>
-        </div>
-
-        <div className='mt-5 grid gap-4 lg:grid-cols-[1.2fr_1fr]'>
-          <div className='rounded-lg border bg-background p-4'>
-            <p className='text-xs uppercase tracking-wide text-muted-foreground'>All Wallet Assets</p>
-            <div className='mt-3 space-y-3'>
-              <div className='flex items-center justify-between text-sm'>
-                <span className='text-muted-foreground'>ETH (wallet)</span>
-                <span className='font-medium'>{walletEthText} ETH</span>
-              </div>
-              <div className='flex items-center justify-between text-sm'>
-                <span className='text-muted-foreground'>ETH (EntryPoint deposit)</span>
-                <span className='font-medium'>{depositEthText} ETH</span>
-              </div>
-              <div className='flex items-center justify-between text-sm'>
-                <span className='text-muted-foreground'>USDC (plain)</span>
-                <span className='font-medium'>{plainUsdcText} USDC</span>
-              </div>
-              <div className='flex items-center justify-between text-sm'>
-                <span className='text-muted-foreground'>WETH</span>
-                <span className='font-medium'>{wethText} WETH</span>
-              </div>
-              <div className='flex items-center justify-between text-sm'>
-                <span className='text-muted-foreground'>cUSDC (decrypted)</span>
-                <span className='font-medium'>{decryptedText ? `${decryptedText} cUSDC` : 'Encrypted'}</span>
+            {/* Encrypted Assets */}
+            <div className='space-y-2'>
+              <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Encrypted</p>
+              <div className='flex items-center gap-2'>
+                <p className='text-4xl font-bold text-blue-500 tabular-nums'>
+                  {decryptedValue !== undefined ? `$${formatMicrosToCurrency(decryptedValue)}` : '••••••'}
+                </p>
+                {decryptedValue === undefined && (
+                  <button
+                    onClick={() => decryptWithAclSync()}
+                    disabled={!canDecrypt || isDecrypting || !handleHex}
+                    className='rounded-lg p-2 transition-colors hover:bg-muted/40 disabled:opacity-40'
+                  >
+                    {isDecrypting ? <Loader2 size={16} className='animate-spin text-muted-foreground' /> : <Eye size={16} className='text-muted-foreground' />}
+                  </button>
+                )}
               </div>
             </div>
           </div>
-
-          <div className='rounded-lg border bg-background p-4'>
-            <p className='text-xs uppercase tracking-wide text-muted-foreground'>Confidential Handle Status</p>
-            <p className='mt-2 font-mono text-xs break-all text-muted-foreground'>{handleHex || 'No encrypted handle yet'}</p>
-            {(decryptError || serverSignerError) ? (
-              <p className='mt-3 text-xs text-rose-600'>{decryptError || serverSignerError}</p>
-            ) : (
-              <p className='mt-3 text-xs text-muted-foreground'>
-                The encrypted handle updates after confidential balance changes. Decrypt again to refresh visible cUSDC.
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className='mt-6 rounded-xl border bg-background/40 p-4'>
-          <div className='mb-3'>
-            <p className='text-xs uppercase tracking-wide text-muted-foreground'>Wallet Actions</p>
-            <p className='mt-1 text-sm text-muted-foreground'>Send and receive directly from your merchant wallet on this page.</p>
-          </div>
-
-          {me ? (
-            <Tabs defaultValue='send' className='space-y-4'>
-              <TabsList className='grid h-11 w-full grid-cols-2 rounded-lg bg-muted/50'>
-                <TabsTrigger value='send'>Send</TabsTrigger>
-                <TabsTrigger value='receive'>Receive</TabsTrigger>
-              </TabsList>
-              <TabsContent value='send' className='mt-0'>
-                <SendTokenCard me={me} />
-              </TabsContent>
-              <TabsContent value='receive' className='mt-0'>
-                <ReceiveTokenCard address={me.account as Hex | undefined} />
-              </TabsContent>
-            </Tabs>
-          ) : (
-            <p className='rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground'>
-              Connect your merchant wallet to enable send and receive actions.
-            </p>
-          )}
         </div>
       </div>
 
-      <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
-        {metricCard('Active Subscriptions', String(metrics?.subscriptionsActive || 0), 'Current, collecting')}
+      {/* Wallet Actions */}
+      <div className='max-w-3xl rounded-xl border border-border/60 bg-card/50 backdrop-blur overflow-hidden'>
+        <div className='px-6 py-4 border-b border-border/40'>
+          <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Wallet Actions</p>
+        </div>
+
+        {me ? (
+          <>
+            <div className='flex items-center gap-3 p-6'>
+              <Button
+                variant='outline'
+                className={`flex-1 rounded-full border border-border/60 gap-2 ${activeAction === 'send' ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground' : 'bg-background/50 hover:bg-muted/40'}`}
+                onClick={() => setActiveAction(activeAction === 'send' ? null : 'send')}
+              >
+                Send
+              </Button>
+              <Button
+                variant='outline'
+                className={`flex-1 rounded-full border border-border/60 gap-2 ${activeAction === 'receive' ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground' : 'bg-background/50 hover:bg-muted/40'}`}
+                onClick={() => setActiveAction(activeAction === 'receive' ? null : 'receive')}
+              >
+                Receive
+              </Button>
+              <Button
+                variant='outline'
+                className={`flex-1 rounded-full border border-border/60 gap-2 ${activeAction === 'shield' ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground' : 'bg-background/50 hover:bg-muted/40'}`}
+                onClick={() => setActiveAction(activeAction === 'shield' ? null : 'shield')}
+              >
+                Shield
+              </Button>
+            </div>
+
+            {activeAction === 'send' && (
+              <div className='border-t border-border/40 bg-background/30 p-6'>
+                <SendTokenCard me={me} />
+              </div>
+            )}
+
+            {activeAction === 'receive' && (
+              <div className='border-t border-border/40 bg-background/30 p-6'>
+                <ReceiveTokenCard address={me.account as Hex | undefined} />
+              </div>
+            )}
+
+            {activeAction === 'shield' && (
+              <div className='border-t border-border/40 bg-background/30 p-6'>
+                <ShieldCard me={me} />
+              </div>
+            )}
+          </>
+        ) : (
+          <p className='p-6 text-center text-sm text-muted-foreground'>
+            Connect your merchant wallet to enable actions.
+          </p>
+        )}
+      </div>
+
+      {/* Metrics */}
+      <div className='max-w-3xl grid gap-3 grid-cols-2'>
+        {metricCard('Active Subscriptions', String(metrics?.subscriptionsActive || 0))}
         {metricCard(
           'Past Due',
           String(metrics?.subscriptionsPastDue || 0),
-          'Needs recovery action',
           (metrics?.subscriptionsPastDue || 0) > 0 ? 'warning' : 'default'
         )}
         {metricCard(
           'Recovery At Risk',
           String(metrics?.recoveryAtRisk || 0),
-          'Open/uncollectible cycles',
           (metrics?.recoveryAtRisk || 0) > 0 ? 'danger' : 'default'
         )}
-        {metricCard('MRR Proxy', `${mrrText} cUSDC`, 'From latest confirmed pulls')}
+        {metricCard('MRR Proxy', `${mrrText} cUSDC`)}
       </div>
 
-      <div className='grid gap-6 xl:grid-cols-[1.4fr_1fr]'>
-        <div className='rounded-xl border bg-card p-6 shadow-sm'>
+      {/* Recovery + Quick links */}
+      <div className='max-w-3xl space-y-3'>
+        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-6'>
           <div className='mb-4 flex items-center justify-between'>
             <div>
-              <h3 className='font-semibold'>Needs Attention</h3>
-              <p className='text-sm text-muted-foreground'>Prioritized failed or delayed billing cycles.</p>
+              <h3 className='font-semibold text-foreground'>Needs Attention</h3>
             </div>
             <Link
               href='/merchant/recovery'
-              className='inline-flex items-center rounded-md border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted'
+              className='inline-flex items-center rounded-full border border-border/60 bg-background/50 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted/40'
             >
               Open Recovery
               <ArrowRight className='ml-1 h-3.5 w-3.5' />
@@ -248,28 +279,25 @@ export default function MerchantPage() {
           </div>
 
           {recoveryQueue.length === 0 ? (
-            <div className='rounded-lg border border-dashed p-10 text-center'>
-              <p className='text-sm font-medium'>No urgent recovery items</p>
-              <p className='mt-1 text-xs text-muted-foreground'>
-                Billing failures and retry queues will appear here when collection needs intervention.
-              </p>
+            <div className='rounded-lg border border-dashed border-border/60 p-10 text-center'>
+              <p className='text-sm font-medium text-foreground'>No urgent items</p>
             </div>
           ) : (
-            <div className='space-y-3'>
+            <div className='space-y-2'>
               {recoveryQueue.slice(0, 6).map((item) => (
-                <div key={item.cycle.id} className='rounded-lg border bg-background p-3'>
+                <div key={item.cycle.id} className='rounded-lg border border-border/40 bg-background/30 p-3'>
                   <div className='flex items-start justify-between gap-3'>
-                    <div className='space-y-1'>
-                      <p className='text-sm font-medium'>{item.subscription?.customerCardAddress || 'Unknown card'}</p>
+                    <div className='space-y-0.5'>
+                      <p className='text-sm font-medium text-foreground'>{item.subscription?.customerCardAddress || 'Unknown'}</p>
                       <p className='text-xs text-muted-foreground'>
-                        {item.cycle.status.toUpperCase()} • Attempts: {item.cycle.attemptCount}
+                        {item.cycle.status.toUpperCase()} · {item.cycle.attemptCount} attempts
                       </p>
                     </div>
                     <div className='text-right'>
-                      <p className='text-xs text-rose-600'>Priority {item.priorityScore}</p>
+                      <p className='text-xs font-medium text-rose-500'>P{item.priorityScore}</p>
                       <p className='text-[11px] text-muted-foreground'>
                         {item.cycle.nextAttemptAt
-                          ? `Next: ${new Date(item.cycle.nextAttemptAt).toLocaleString()}`
+                          ? `Retry: ${new Date(item.cycle.nextAttemptAt).toLocaleString()}`
                           : 'No retry scheduled'}
                       </p>
                     </div>
@@ -280,68 +308,53 @@ export default function MerchantPage() {
           )}
         </div>
 
-        <div className='space-y-4'>
-          <Link href='/merchant/plans' className='block rounded-xl border bg-card p-5 shadow-sm hover:bg-muted/30'>
-            <div className='flex items-center justify-between'>
+        <div className='grid grid-cols-2 gap-3'>
+          <Link href='/merchant/plans' className='flex items-center justify-between rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5 transition-colors hover:bg-muted/30'>
+            <div className='flex items-center gap-3'>
               <Folder className='h-5 w-5 text-primary' />
-              <ArrowRight className='h-4 w-4 text-muted-foreground' />
+              <h3 className='font-semibold text-foreground'>Plans</h3>
             </div>
-            <h3 className='mt-3 font-semibold'>Plans</h3>
-            <p className='mt-1 text-sm text-muted-foreground'>Create monthly/yearly plans and share checkout links.</p>
+            <ArrowRight className='h-4 w-4 text-muted-foreground' />
           </Link>
 
-          <Link href='/merchant/subscriptions' className='block rounded-xl border bg-card p-5 shadow-sm hover:bg-muted/30'>
-            <div className='flex items-center justify-between'>
+          <Link href='/merchant/subscriptions' className='flex items-center justify-between rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5 transition-colors hover:bg-muted/30'>
+            <div className='flex items-center gap-3'>
               <Clock3 className='h-5 w-5 text-primary' />
-              <ArrowRight className='h-4 w-4 text-muted-foreground' />
+              <h3 className='font-semibold text-foreground'>Subscribers</h3>
             </div>
-            <h3 className='mt-3 font-semibold'>Subscribers</h3>
-            <p className='mt-1 text-sm text-muted-foreground'>Agreement ledger, statuses, pause/resume, cancel at period end.</p>
+            <ArrowRight className='h-4 w-4 text-muted-foreground' />
           </Link>
 
-          <Link href='/merchant/billing-cycles' className='block rounded-xl border bg-card p-5 shadow-sm hover:bg-muted/30'>
-            <div className='flex items-center justify-between'>
+          <Link href='/merchant/billing-cycles' className='flex items-center justify-between rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5 transition-colors hover:bg-muted/30'>
+            <div className='flex items-center gap-3'>
               <CreditCard className='h-5 w-5 text-primary' />
-              <ArrowRight className='h-4 w-4 text-muted-foreground' />
+              <h3 className='font-semibold text-foreground'>Billing</h3>
             </div>
-            <h3 className='mt-3 font-semibold'>Billing</h3>
-            <p className='mt-1 text-sm text-muted-foreground'>Run due charges, inspect attempts, and retry failures.</p>
+            <ArrowRight className='h-4 w-4 text-muted-foreground' />
           </Link>
 
-          <Link href='/merchant/payouts' className='block rounded-xl border bg-card p-5 shadow-sm hover:bg-muted/30'>
-            <div className='flex items-center justify-between'>
-              <Wallet className='h-5 w-5 text-primary' />
-              <ArrowRight className='h-4 w-4 text-muted-foreground' />
-            </div>
-            <h3 className='mt-3 font-semibold'>Payouts</h3>
-            <p className='mt-1 text-sm text-muted-foreground'>Unwrap cUSDC and keep a settlement ledger.</p>
-          </Link>
-
-          <Link href='/merchant/customers' className='block rounded-xl border bg-card p-5 shadow-sm hover:bg-muted/30'>
-            <div className='flex items-center justify-between'>
+          <Link href='/merchant/customers' className='flex items-center justify-between rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5 transition-colors hover:bg-muted/30'>
+            <div className='flex items-center gap-3'>
               <Users className='h-5 w-5 text-primary' />
-              <ArrowRight className='h-4 w-4 text-muted-foreground' />
+              <h3 className='font-semibold text-foreground'>Customers</h3>
             </div>
-            <h3 className='mt-3 font-semibold'>Customers</h3>
-            <p className='mt-1 text-sm text-muted-foreground'>Track active cards, risk state, and recent outcomes.</p>
+            <ArrowRight className='h-4 w-4 text-muted-foreground' />
           </Link>
 
-          <Link href='/merchant/contracts' className='block rounded-xl border bg-card p-5 shadow-sm hover:bg-muted/30'>
-            <div className='flex items-center justify-between'>
+          <Link href='/merchant/contracts' className='flex items-center justify-between rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5 transition-colors hover:bg-muted/30'>
+            <div className='flex items-center gap-3'>
               <ShieldCheck className='h-5 w-5 text-primary' />
-              <ArrowRight className='h-4 w-4 text-muted-foreground' />
+              <h3 className='font-semibold text-foreground'>Contract Controls</h3>
             </div>
-            <h3 className='mt-3 font-semibold'>Contract Controls</h3>
-            <p className='mt-1 text-sm text-muted-foreground'>Low-level chain verification and encrypted handle checks.</p>
+            <ArrowRight className='h-4 w-4 text-muted-foreground' />
           </Link>
 
-          <Link href='/merchant/integration' className='block rounded-xl border bg-card p-5 shadow-sm hover:bg-muted/30'>
-            <div className='flex items-center justify-between'>
-              <Clock3 className='h-5 w-5 text-primary' />
-              <ArrowRight className='h-4 w-4 text-muted-foreground' />
+          <Link href='/merchant/integration' className='flex items-center justify-between rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5 transition-colors hover:bg-muted/30'>
+            <div className='flex items-center gap-3'>
+              <CreditCard className='h-5 w-5 text-primary' />
+              <h3 className='font-semibold text-foreground'>Integration</h3>
             </div>
-            <h3 className='mt-3 font-semibold'>Integration</h3>
-            <p className='mt-1 text-sm text-muted-foreground'>Embed URL setup, SDK config, and event diagnostics.</p>
+            <ArrowRight className='h-4 w-4 text-muted-foreground' />
           </Link>
         </div>
       </div>

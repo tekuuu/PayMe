@@ -89,7 +89,7 @@ export default function SmartWalletOnboarding({
                     variant={variant as any} 
                     className={cn("font-medium rounded-full px-5 transition-all active:scale-95", className)}
                 >
-                    {createForm ? 'Create Wallet' : 'Login with Passkey'}
+                    {createForm ? 'Create Wallet' : 'Login'}
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md bg-card border-border shadow-2xl pb-8">

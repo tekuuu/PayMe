@@ -29,7 +29,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import React from 'react';
 import { IconChevronRight } from '@tabler/icons-react';
 import { Icons } from '../icons';
-import Image from 'next/image';
 
 export default function MerchantSidebar() {
   const pathname = usePathname();
@@ -53,22 +52,6 @@ export default function MerchantSidebar() {
   return (
     <Sidebar collapsible='icon' className='w-64'>
       <SidebarContent className='overflow-visible w-full'>
-        <div className='flex h-16 items-center justify-center px-4'>
-          <Image
-            src='/assets/payme.svg'
-            alt='PayMe Logo'
-            width={140}
-            height={35}
-            className='hidden group-data-[collapsible=icon]:block'
-          />
-          <Image
-            src='/assets/payme.svg'
-            alt='PayMe Logo'
-            width={32}
-            height={32}
-            className='block group-data-[collapsible=icon]:hidden'
-          />
-        </div>
         <SidebarGroup>
 
           <SidebarMenu>

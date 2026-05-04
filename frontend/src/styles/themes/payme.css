@@ -43,8 +43,8 @@
     --card-foreground: oklch(0.95 0.01 240);
     --popover: oklch(0.06 0 0);
     --popover-foreground: oklch(0.95 0.01 240);
-    --primary: oklch(0.7 0.15 200);
-    --primary-foreground: oklch(0.1 0.02 250);
+    --primary: oklch(0.55 0.18 250);
+    --primary-foreground: oklch(1 0 0);
     --secondary: oklch(0.12 0 0);
     --secondary-foreground: oklch(0.95 0.01 240);
     --muted: oklch(0.15 0 0);
@@ -55,15 +55,15 @@
     --destructive-foreground: oklch(1 0 1);
     --border: oklch(0.15 0 0);
     --input: oklch(0.12 0 0);
-    --ring: oklch(0.7 0.15 200);
+    --ring: oklch(0.55 0.18 250);
     --sidebar: oklch(0.05 0 0);
     --sidebar-foreground: oklch(0.95 0.01 240);
-    --sidebar-primary: oklch(0.7 0.15 200);
-    --sidebar-primary-foreground: oklch(0.1 0.02 250);
+    --sidebar-primary: oklch(0.55 0.18 250);
+    --sidebar-primary-foreground: oklch(1 0 0);
     --sidebar-accent: oklch(0.1 0 0);
     --sidebar-accent-foreground: oklch(0.95 0.01 240);
     --sidebar-border: oklch(0.1 0 0);
-    --sidebar-ring: oklch(0.7 0.15 200);
+    --sidebar-ring: oklch(0.55 0.18 250);
     --shadow-color: hsl(220 40% 2% / 0.5);
 }
 
@@ -105,6 +105,107 @@
         --radius-sm: calc(var(--radius) - 4px);
         --radius-md: calc(var(--radius) - 2px);
         --radius-lg: var(--radius);
-        --radius-xl: calc(var(--radius) + 4px);
+--radius-xl: calc(var(--radius) + 4px);
     }
+}
+
+/* Override dark mode primary to match light mode's vibrant blue-purple */
+[data-theme='payme'].dark {
+    --primary: oklch(0.55 0.18 250);
+    --primary-foreground: oklch(1 0 0);
+    --ring: oklch(0.55 0.18 250);
+    --sidebar-primary: oklch(0.55 0.18 250);
+    --sidebar-primary-foreground: oklch(1 0 0);
+    --sidebar-ring: oklch(0.55 0.18 250);
+}
+
+/* Dark mode button active/selected states - force vibrant color */
+[data-theme='payme'].dark button.bg-primary,
+[data-theme='payme'].dark [data-state='selected'].bg-primary {
+    background: var(--primary) !important;
+    color: var(--primary-foreground) !important;
+    border-color: var(--primary) !important;
+}
+
+/* Dark mode outline button when active */
+[data-theme='payme'].dark button[data-state='selected'],
+[data-theme='payme'].dark [data-state='selected'] {
+    background: var(--primary) !important;
+    color: var(--primary-foreground) !important;
+    border-color: var(--primary) !important;
+}
+
+/* Dark mode hover states for wallet action buttons */
+[data-theme='payme'].dark button.hover\:bg-primary\/90:hover,
+[data-theme='payme'].dark button.hover\:bg-primary\/90:hover {
+    background: oklch(0.55 0.18 250 / 0.9) !important;
+    color: oklch(1 0 0) !important;
+}
+
+/* Dark mode - override button variant styles when active */
+[data-theme='payme'].dark button[data-state='selected'].rounded-full,
+[data-theme='payme'].dark [data-state='selected'].rounded-full {
+    background: var(--primary) !important;
+    color: var(--primary-foreground) !important;
+    border-color: var(--primary) !important;
+}
+
+/* Dark mode specifically for outline variant buttons - match light mode */
+[data-theme='payme'].dark .variant-outline[data-state='selected'],
+[data-theme='payme'].dark button.variant-outline[data-state='selected'] {
+    background: var(--primary) !important;
+    color: var(--primary-foreground) !important;
+    border-color: var(--primary) !important;
+}
+
+[data-theme='payme'].dark .rounded-full.border.border-border\/60.bg-background\/50[data-state='selected'],
+[data-theme='payme'].dark .rounded-full.border.border-border\/60[data-state='selected'] {
+    background: oklch(0.55 0.18 250) !important;
+    border-color: oklch(0.55 0.18 250) !important;
+    color: oklch(1 0 0) !important;
+}
+
+/* More specific targeting - use direct !important to override inline styles */
+[data-theme='payme'].dark .inline-flex.items-center.justify-center.gap-2.whitespace-nowrap.rounded-full {
+    background: oklch(0.55 0.18 250) !important;
+    border-color: oklch(0.55 0.18 250) !important;
+    color: oklch(1 0 0) !important;
+}
+
+[data-theme='payme'].dark .inline-flex.items-center.justify-center.gap-2.whitespace-nowrap.rounded-full[data-state='selected'] {
+    background: oklch(0.55 0.18 250) !important;
+    border-color: oklch(0.55 0.18 250) !important;
+    color: oklch(1 0 0) !important;
+}
+
+/* Dark mode wallet action buttons - override the dark:bg-input/30 */
+[data-theme='payme'].dark .gap-2.rounded-full.border.border-border\/60[data-state='selected'],
+[data-theme='payme'].dark button.rounded-full.border.border-border\/60[data-state='selected'],
+[data-theme='payme'].dark button:is([data-state='selected']) {
+    background: oklch(0.55 0.18 250) !important;
+    border-color: oklch(0.55 0.18 250) !important;
+    color: oklch(1 0 0) !important;
+}
+
+[data-theme='payme'].dark .btn-vibrant {
+    --tw-border-opacity: 1;
+    border-color: oklch(0.55 0.18 250 / 0.5);
+    background: oklch(0.15 0.02 250 / 0.3);
+}
+
+/* Wallet action buttons - same vibrant blue in dark mode as light */
+[data-theme='payme'].dark button:where(.bg-primary, [class*='bg-primary']) {
+    background: oklch(0.55 0.18 250) !important;
+    border-color: oklch(0.55 0.18 250) !important;
+    color: oklch(1 0 0) !important;
+}
+
+[data-theme='payme'].dark button:where(.bg-primary, [class*='bg-primary']):hover {
+    background: oklch(0.55 0.18 250 / 0.9) !important;
+    color: oklch(1 0 0) !important;
+}
+
+/* Force text colors for active state */
+[data-theme='payme'].dark button:where(.text-primary-foreground, [class*='text-primary-foreground']) {
+    color: oklch(1 0 0) !important;
 }

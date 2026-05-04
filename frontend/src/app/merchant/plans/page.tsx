@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Copy, Plus, Settings2, Trash2 } from 'lucide-react';
+import { Copy, Plus, RefreshCw, Settings2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Hex, parseUnits } from 'viem';
 import { useMe } from '@/providers/auth-provider';
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { formatMicrosToCurrency, archivePlanTemplate, createPlanTemplate, updatePlanTemplate } from '@/lib/merchant/control-plane-store';
 import type { MerchantPlan, PlanInterval } from '@/lib/merchant/types';
@@ -33,7 +34,7 @@ function intervalToSeconds(interval: PlanInterval) {
 
 export default function MerchantPlansPage() {
   const { me } = useMe();
-  const { state, isHydrated } = useMerchantControlPlane(me?.account);
+  const { state, isHydrated, refresh } = useMerchantControlPlane(me?.account);
 
   const plans = useMemo(() => {
     const list = [...(state?.plans || [])];
@@ -222,7 +223,7 @@ export default function MerchantPlansPage() {
 
   return (
     <div className='flex-1 space-y-6 p-8 pt-6'>
-      <div className='flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between'>
+<div className='flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between'>
         <div className='space-y-2'>
           <h2 className='text-3xl font-bold tracking-tight'>Plans</h2>
           <p className='text-sm text-muted-foreground'>
@@ -230,15 +231,89 @@ export default function MerchantPlansPage() {
           </p>
         </div>
 
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger asChild>
-            <Button className='gap-2'>
-              <Plus className='h-4 w-4' />
-              New Plan
-            </Button>
-          </DialogTrigger>
-          <DialogContent className='sm:max-w-lg'>
-            <DialogHeader>
+        <div className='flex gap-2'>
+          <Button variant='outline' size='sm' className='gap-2' onClick={() => refresh()}>
+            <RefreshCw className='h-4 w-4' />
+            Refresh
+          </Button>
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger asChild>
+              <Button className='gap-2'>
+                <Plus className='h-4 w-4' />
+                New Plan
+              </Button>
+            </DialogTrigger>
+            <DialogContent className='sm:max-w-lg'>
+              <DialogHeader>
+                <DialogTitle>Create Plan</DialogTitle>
+                <DialogDescription>Define a plan cadence and amount (cUSDC, encrypted on-chain at approval time).</DialogDescription>
+              </DialogHeader>
+
+              <div className='space-y-4'>
+                <div className='space-y-2'>
+                  <Label>Plan Name</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder='Starter' />
+                </div>
+
+                <div className='space-y-2'>
+                  <Label>Description</Label>
+                  <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder='What does this plan include?' />
+                </div>
+
+                <div className='grid gap-4 sm:grid-cols-2'>
+                  <div className='space-y-2'>
+                    <Label>Cadence</Label>
+                    <Select value={interval} onValueChange={(value) => setInterval(value as PlanInterval)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value='monthly'>Monthly</SelectItem>
+                        <SelectItem value='yearly'>Yearly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className='space-y-2'>
+                    <Label>Amount (cUSDC)</Label>
+                    <Input
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      type='number'
+                      min='0'
+                      step='0.000001'
+                      placeholder='5.00'
+                    />
+                  </div>
+                </div>
+
+                <div className='flex items-center justify-end gap-2'>
+                  <Button variant='outline' onClick={() => setCreateOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleCreate} disabled={submittingAction === 'create'}>
+                    {submittingAction === 'create' ? 'Creating...' : 'Create'}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+        <div className='flex gap-2'>
+          <Button variant='outline' size='sm' className='gap-2' onClick={() => refresh()}>
+            <RefreshCw className='h-4 w-4' />
+            Refresh
+          </Button>
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger asChild>
+              <Button className='gap-2'>
+                <Plus className='h-4 w-4' />
+                New Plan
+              </Button>
+            </DialogTrigger>
+            <DialogContent className='sm:max-w-lg'>
+              <DialogHeader>
               <DialogTitle>Create Plan</DialogTitle>
               <DialogDescription>Define a plan cadence and amount (cUSDC, encrypted on-chain at approval time).</DialogDescription>
             </DialogHeader>
