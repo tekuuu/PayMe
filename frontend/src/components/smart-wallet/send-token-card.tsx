@@ -19,6 +19,7 @@ import {
 import { AlertCircle, Send, CheckCircle2, Loader2 } from 'lucide-react';
 import { IconWallet, IconCoins, IconHistory } from '@tabler/icons-react';
 import { encodeFunctionData, Hex, isAddress, parseEther, parseUnits, zeroAddress } from 'viem';
+import { recordCustomerActivity, confirmCustomerActivity, addConfirmedActivity } from '@/lib/merchant/control-plane-store';
 import { toast } from 'sonner';
 
 type RecentRecipient = {
@@ -164,6 +165,9 @@ export function SendTokenCard({ me }: { me: Me }) {
       return;
     }
 
+    const sender = me.account as Hex;
+    console.log('[Send] Starting send to:', recipient, 'amount:', amount);
+
     if (selectedToken.symbol === 'ETH') {
       const spendableEth = (walletEthBalanceRaw ?? 0n) + (entryPointDepositRaw ?? 0n);
       if (amountRaw > spendableEth) {
@@ -245,8 +249,15 @@ export function SendTokenCard({ me }: { me: Me }) {
         throw new Error('Transaction confirmed but transaction hash is missing in receipt.');
       }
 
-      setSuccessTxHash(txHash);
-      setStep(null);
+setSuccessTxHash(txHash);
+      addConfirmedActivity(sender, {
+        type: 'send',
+        amount: amount,
+        token: selectedToken.symbol,
+        counterpartyAddress: recipient,
+        txHash,
+        userOpHash: hash,
+      });
       saveRecipient(recipient as Hex);
       toast.success(`${amount} ${selectedToken.symbol} sent successfully`);
     } catch (err: any) {

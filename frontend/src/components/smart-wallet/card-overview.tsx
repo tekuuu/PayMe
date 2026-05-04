@@ -5,7 +5,9 @@ import {
     IconEye,
     IconCopy,
     IconWallet,
-    IconSend
+    IconSend,
+    IconUser,
+    IconExternalLink
 } from '@tabler/icons-react';
 import { Hex, encodeFunctionData, parseUnits, toHex } from 'viem';
 import { toast } from 'sonner';
@@ -123,7 +125,8 @@ export function CardOverview({ cardAddress }: { cardAddress: Hex | undefined }) 
     const [pendingDecryptAfterSync, setPendingDecryptAfterSync] = useState(false);
     const [sendTo, setSendTo] = useState('');
     const [sendAmount, setSendAmount] = useState('');
-    const [showSendForm, setShowSendForm] = useState(false);
+    const [activeAction, setActiveAction] = useState<'fund' | 'withdraw' | null>(null);
+    const [withdrawMode, setWithdrawMode] = useState<'self' | 'other'>('self');
 
     const { instance } = useFhevmContext();
 
@@ -188,7 +191,7 @@ export function CardOverview({ cardAddress }: { cardAddress: Hex | undefined }) 
 
     useEffect(() => {
         if (!isCurrentUserOwner) {
-            setShowSendForm(false);
+            setActiveAction(null);
         }
     }, [isCurrentUserOwner]);
 
@@ -335,8 +338,9 @@ export function CardOverview({ cardAddress }: { cardAddress: Hex | undefined }) 
             toast.error("FHE instance is not ready. Please refresh FHE and try again.");
             return;
         }
-        if (!sendTo || sendTo.trim().length === 0) {
-            toast.error("Recipient address is required.");
+        const recipient = withdrawMode === 'self' ? resolvedOwnerAddress : sendTo;
+        if (!recipient) {
+            toast.error("Recipient address is not available.");
             return;
         }
         if (!sendAmount || isNaN(Number(sendAmount)) || Number(sendAmount) <= 0) {
@@ -372,7 +376,7 @@ export function CardOverview({ cardAddress }: { cardAddress: Hex | undefined }) 
                 data: encodeFunctionData({
                     abi: PRIVATE_CARD_ABI,
                     functionName: 'transferWithProof',
-                    args: [sendTo as Hex, toHex(handles[0]), inputProofHex]
+                    args: [recipient as Hex, toHex(handles[0]), inputProofHex]
                 })
             };
 
@@ -397,7 +401,7 @@ export function CardOverview({ cardAddress }: { cardAddress: Hex | undefined }) 
             await refreshConfidentialBalance();
 
             toast.success(`Successfully sent ${sendAmount} cUSDC privately!`);
-            setShowSendForm(false);
+            setActiveAction(null);
             setSendAmount('');
             setSendTo('');
         } catch (error: any) {
@@ -628,6 +632,7 @@ export function CardOverview({ cardAddress }: { cardAddress: Hex | undefined }) 
             await refreshConfidentialBalance();
 
             toast.success(`Successfully funded card with ${fundAmount} ${symbol}!`);
+            setActiveAction(null);
             setFundAmount('');
         } catch (error: any) {
             console.error("Funding failed:", error);
@@ -648,165 +653,188 @@ export function CardOverview({ cardAddress }: { cardAddress: Hex | undefined }) 
     };
 
     return (
-        <div className='mx-auto w-full max-w-3xl space-y-4 animate-in fade-in duration-700'>
-            {/* Card visualization */}
-            <div className='rounded-2xl border border-border/60 bg-gradient-to-br from-muted/60 to-muted/20 p-4 sm:p-6'>
-                <div className='mx-auto w-full max-w-sm'>
-                    {/* The card */}
-                    <div className='relative overflow-hidden rounded-xl bg-gradient-to-br from-foreground to-foreground/80 p-5 text-background shadow-lg'>
-                        {/* Subtle grid pattern */}
-                        <div className='absolute inset-0 opacity-[0.03]' style={{ backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
+        <div className='mx-auto w-full space-y-3 sm:space-y-4 animate-in fade-in duration-700'>
+            {/* Unified Card Container */}
+            <div className='rounded-2xl border border-border/60 bg-card/50 backdrop-blur overflow-hidden shadow-xl'>
+                {/* Card face - cool gradient */}
+                <div className='relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-4 sm:p-5 text-white dark:from-slate-900 dark:via-indigo-950 dark:to-slate-900'>
+                    <div className='absolute inset-0 opacity-10' style={{ backgroundImage: 'radial-gradient(circle at 20% 80%, #6366f1 1px, transparent 1px), radial-gradient(circle at 80% 20%, #a855f7 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+                    <div className='absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-500/20 to-transparent rounded-full blur-3xl' />
+                    
+                    <div className='relative space-y-3 sm:space-y-4'>
+                        <div className='flex items-center justify-between'>
+                            <span className='text-sm font-bold tracking-[0.2em]'>PAYME</span>
+                            <span className='rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium tracking-wide'>
+                                FHE
+                            </span>
+                        </div>
 
-                        <div className='relative space-y-4'>
-                            {/* Top row */}
-                            <div className='flex items-center justify-between'>
-                                <span className='text-sm font-bold tracking-[0.2em]'>PAYME</span>
-                                <span className='rounded-full bg-background/10 px-2 py-0.5 text-[10px] font-medium tracking-wide'>
-                                    FHE
-                                </span>
+                        <div className='space-y-1'>
+                            <p className='font-mono text-sm tracking-[0.15em] opacity-60 break-all'>
+                                {cardAddress ? `${cardAddress.slice(0, 6)}  ${cardAddress.slice(6, 12)}  ${cardAddress.slice(12, 18)}  ${cardAddress.slice(-4)}` : '••••  ••••  ••••  ••••'}
+                            </p>
+                            <button
+                                onClick={() => handleCopy(cardAddress, 'Card address')}
+                                className='flex items-center gap-1 text-[11px] opacity-40 hover:opacity-80 transition-opacity'
+                            >
+                                <IconCopy size={12} />
+                                <span>copy</span>
+                            </button>
+                        </div>
+
+                        <div className='space-y-0.5'>
+                            <p className='text-[10px] uppercase tracking-wide opacity-40'>Owner</p>
+                            <p className='font-mono text-xs break-all'>
+                                {resolvedOwnerAddress ? `${resolvedOwnerAddress.slice(0, 6)}...${resolvedOwnerAddress.slice(-4)}` : '••••••••••'}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Private balance section */}
+                <div className='relative overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900 p-4 sm:p-5 text-white dark:from-slate-800 dark:to-slate-900'>
+                    <div className='absolute inset-0 opacity-10' style={{ backgroundImage: 'radial-gradient(circle at 80% 80%, #6366f1 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+                    
+                    <div className='relative'>
+                        <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+                            <div className='min-w-0'>
+                                <p className='text-[11px] uppercase tracking-wide opacity-50'>Private balance</p>
+                                <p className='text-lg sm:text-xl font-bold tracking-tight mt-0.5 break-all'>{formattedBalance}</p>
                             </div>
+                            <Button
+                                size='sm'
+                                className='gap-2 rounded-full bg-white text-slate-900 hover:bg-white/90 shrink-0 self-start sm:self-auto font-medium'
+                                onClick={handleDecryptBalance}
+                                disabled={isDecrypting || isDecryptInProgress || !isCurrentUserOwner}
+                            >
+                                <IconEye size={16} />
+                                {!isCurrentUserOwner ? 'Owner only' : isDecrypting || isDecryptInProgress ? 'Decrypting...' : 'Decrypt'}
+                            </Button>
+                        </div>
+                        {(isDecrypting || isDecryptInProgress) && (
+                            <p className='mt-2 text-xs opacity-40'>
+                                Decrypting your balance...
+                            </p>
+                        )}
+                    </div>
+                </div>
 
-                            {/* Card number */}
-                            <div className='space-y-1'>
-                                <p className='font-mono text-sm tracking-[0.15em] opacity-60'>
-                                    {cardAddress ? `${cardAddress.slice(0, 6)}  ${cardAddress.slice(6, 12)}  ${cardAddress.slice(12, 18)}  ${cardAddress.slice(-4)}` : '••••  ••••  ••••  ••••'}
-                                </p>
-                                <button
-                                    onClick={() => handleCopy(cardAddress, 'Card address')}
-                                    className='flex items-center gap-1 text-[11px] opacity-40 hover:opacity-80 transition-opacity'
+                {/* Divider line */}
+                <div className='h-px bg-gradient-to-r from-transparent via-white/15 to-transparent' />
+
+                {/* Action buttons row */}
+                <div className='relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 px-4 sm:px-5 py-4 sm:py-6 text-white dark:from-slate-900 dark:via-indigo-950 dark:to-slate-900'>
+                    <div className='absolute inset-0 opacity-10' style={{ backgroundImage: 'radial-gradient(circle at 20% 80%, #6366f1 1px, transparent 1px), radial-gradient(circle at 80% 20%, #a855f7 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
+                    
+                    <div className='relative flex items-center justify-center gap-2 sm:gap-3'>
+                        <Button
+                            className='flex-1 gap-1.5 sm:gap-2 rounded-full bg-white/10 text-white hover:bg-white/20 border border-white/20 text-xs sm:text-sm font-medium'
+                            onClick={() => setActiveAction(activeAction === 'fund' ? null : 'fund')}
+                            disabled={!isCurrentUserOwner}
+                        >
+                            <IconWallet size={16} />
+                            {!isCurrentUserOwner ? 'Owner only' : 'Add funds'}
+                        </Button>
+                        <Button
+                            className='flex-1 gap-1.5 sm:gap-2 rounded-full bg-white/10 text-white hover:bg-white/20 border border-white/20 text-xs sm:text-sm font-medium'
+                            onClick={() => setActiveAction(activeAction === 'withdraw' ? null : 'withdraw')}
+                            disabled={!isCurrentUserOwner}
+                        >
+                            <IconSend size={16} />
+                            {!isCurrentUserOwner ? 'Owner only' : 'Withdraw'}
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Expandable Add funds form */}
+                {activeAction === 'fund' && (
+                    <div className='relative overflow-hidden bg-gradient-to-br from-slate-800/90 to-slate-900/90 p-4 sm:p-5 text-white animate-in slide-in-from-top-2 duration-300'>
+                        <div className='absolute inset-0 opacity-10' style={{ backgroundImage: 'radial-gradient(circle at 60% 40%, #6366f1 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+                        
+                        <div className='relative'>
+                            <div className='flex flex-col gap-2'>
+                                <input
+                                    type='number'
+                                    min='0'
+                                    step='0.000001'
+                                    placeholder={`Amount in ${underlyingTokenSymbol || 'token'}`}
+                                    className='h-10 w-full rounded-lg border border-white/20 bg-white/10 px-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-white/30'
+                                    value={fundAmount}
+                                    onChange={(e) => setFundAmount(e.target.value)}
+                                />
+                                <Button
+                                    className='h-10 w-full rounded-full bg-indigo-500 text-white hover:bg-indigo-600 font-medium'
+                                    onClick={handleFundCard}
+                                    disabled={isFunding}
                                 >
-                                    <IconCopy size={12} />
-                                    <span>copy</span>
+                                    <IconWallet size={16} />
+                                    {isFunding ? 'Adding...' : 'Add funds'}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Expandable Withdraw form */}
+                {activeAction === 'withdraw' && (
+                    <div className='relative overflow-hidden bg-gradient-to-br from-slate-800/90 to-slate-900/90 p-4 sm:p-5 text-white animate-in slide-in-from-top-2 duration-300'>
+                        <div className='absolute inset-0 opacity-10' style={{ backgroundImage: 'radial-gradient(circle at 60% 40%, #6366f1 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+                        
+                        <div className='relative space-y-3'>
+                            <div className='flex items-center justify-between'>
+                                <label className='text-[11px] uppercase tracking-wide opacity-50'>Amount</label>
+                                <button
+                                    className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${withdrawMode === 'self' ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white/70'}`}
+                                    onClick={() => setWithdrawMode(withdrawMode === 'self' ? 'other' : 'self')}
+                                >
+                                    {withdrawMode === 'self' ? (
+                                        <>
+                                            <IconUser size={12} />
+                                            Self
+                                        </>
+                                    ) : (
+                                        <>
+                                            <IconExternalLink size={12} />
+                                            External
+                                        </>
+                                    )}
                                 </button>
                             </div>
 
-                            {/* Bottom row */}
-                            <div className='flex items-end justify-between'>
-                                <div className='space-y-0.5'>
-                                    <p className='text-[10px] uppercase tracking-wide opacity-40'>Owner</p>
-                                    <p className='font-mono text-xs'>
-                                        {resolvedOwnerAddress ? `${resolvedOwnerAddress.slice(0, 6)}...${resolvedOwnerAddress.slice(-4)}` : '••••••••••'}
-                                    </p>
-                                </div>
-                                {ownerGuardMessage ? (
-                                    <span className='rounded-md bg-amber-500/20 px-2 py-1 text-[10px] text-amber-200'>
-                                        External
-                                    </span>
-                                ) : (
-                                    <span className='rounded-md bg-background/10 px-2 py-1 text-[10px]'>
-                                        Owned
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Private balance */}
-            <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
-                <div className='flex items-center justify-between'>
-                    <div>
-                        <div className='flex items-center gap-2'>
-                            <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Private balance</p>
-                            {(isDecrypting || isDecryptInProgress) && (
-                                <span className='rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary'>
-                                    Decrypting...
-                                </span>
-                            )}
-                        </div>
-                        <p className='text-xl font-bold tracking-tight text-foreground'>{formattedBalance}</p>
-                    </div>
-                    <Button
-                        size='sm'
-                        variant='outline'
-                        className='gap-2 rounded-full border-border/60 text-foreground hover:bg-muted'
-                        onClick={handleDecryptBalance}
-                        disabled={isDecrypting || isDecryptInProgress || !isCurrentUserOwner}
-                    >
-                        <IconEye size={16} />
-                        {!isCurrentUserOwner ? 'Owner only' : isDecrypting || isDecryptInProgress ? 'Decrypting...' : 'Decrypt'}
-                    </Button>
-                </div>
-            </div>
-
-            {/* Add funds */}
-            <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
-                <p className='text-[11px] uppercase tracking-wide text-muted-foreground mb-2'>Add funds</p>
-                <div className='flex flex-col gap-2 md:flex-row'>
-                    <input
-                        type='number'
-                        min='0'
-                        step='0.000001'
-                        placeholder={`Amount in ${underlyingTokenSymbol || 'token'}`}
-                        className='h-10 flex-1 rounded-lg border border-border/60 bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30'
-                        value={fundAmount}
-                        onChange={(e) => setFundAmount(e.target.value)}
-                    />
-                    <Button
-                        variant='outline'
-                        className='gap-2 rounded-full border-border/60 text-foreground hover:bg-muted'
-                        onClick={handleFundCard}
-                        disabled={isFunding || !isCurrentUserOwner}
-                    >
-                        <IconWallet size={16} />
-                        {!isCurrentUserOwner ? 'Owner only' : isFunding ? 'Adding...' : 'Add funds'}
-                    </Button>
-                </div>
-            </div>
-
-            {/* Send money toggle */}
-            <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
-                <Button
-                    variant='outline'
-                    className='gap-2 rounded-full border-border/60 text-foreground hover:bg-muted'
-                    onClick={() => setShowSendForm(!showSendForm)}
-                    disabled={!isCurrentUserOwner}
-                >
-                    <IconSend size={16} />
-                    {!isCurrentUserOwner ? 'Owner only' : showSendForm ? 'Hide send form' : 'Send money'}
-                </Button>
-            </div>
-
-            {/* Confidential Send Form */}
-            {showSendForm && (
-                <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-6 animate-in fade-in duration-300 space-y-4'>
-                    <h3 className='text-lg font-semibold'>Send money</h3>
-                    <div className='grid gap-4 md:grid-cols-2'>
-                        <div className='space-y-1.5'>
-                            <label className='text-[11px] uppercase tracking-wide text-muted-foreground'>Recipient Address</label>
-                            <input
-                                type='text'
-                                placeholder='0x...'
-                                className='h-10 w-full rounded-lg border border-border/60 bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30'
-                                value={sendTo}
-                                onChange={(e) => setSendTo(e.target.value)}
-                            />
-                        </div>
-                        <div className='space-y-1.5'>
-                            <label className='text-[11px] uppercase tracking-wide text-muted-foreground'>Amount</label>
                             <input
                                 type='number'
+                                min='0'
                                 placeholder='0.00'
-                                className='h-10 w-full rounded-lg border border-border/60 bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30'
+                                className='h-10 w-full rounded-lg border border-white/20 bg-white/10 px-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-white/30'
                                 value={sendAmount}
                                 onChange={(e) => setSendAmount(e.target.value)}
                             />
+
+                            {withdrawMode === 'other' && (
+                                <input
+                                    type='text'
+                                    placeholder='Recipient address (0x...)'
+                                    className='h-10 w-full rounded-lg border border-white/20 bg-white/10 px-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-white/30'
+                                    value={sendTo}
+                                    onChange={(e) => setSendTo(e.target.value)}
+                                />
+                            )}
+
+                            <Button
+                                className='h-10 w-full rounded-lg font-medium bg-indigo-500 text-white hover:bg-indigo-600'
+                                onClick={handleSendConfidential}
+                                disabled={isSending || (withdrawMode === 'other' && !sendTo) || !sendAmount}
+                            >
+                                {isSending ? (
+                                    <span className='h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent' />
+                                ) : (
+                                    withdrawMode === 'self' ? 'Withdraw to wallet' : 'Send to address'
+                                )}
+                            </Button>
                         </div>
                     </div>
-                    <Button
-                        className='h-10 w-full rounded-lg font-medium bg-primary text-primary-foreground hover:bg-primary/90'
-                        onClick={handleSendConfidential}
-                        disabled={isSending || !sendTo || !sendAmount || !isCurrentUserOwner}
-                    >
-                        {isSending ? (
-                            <span className='h-5 w-5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent' />
-                        ) : (
-                            'Send money'
-                        )}
-                    </Button>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 }

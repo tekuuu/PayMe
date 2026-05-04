@@ -13,6 +13,7 @@ import {
 import { smartWallet } from '@/lib/smart-wallet';
 import { UserOpBuilder } from '@/lib/smart-wallet/service/userOps';
 import { UserOperationAsHex } from '@/lib/smart-wallet/service/userOps/types';
+import { addConfirmedActivity } from '@/lib/merchant/control-plane-store';
 import { ensureUserOpPrefund } from '@/lib/smart-wallet/service/userOps/prefund';
 import { describeExecutionRevertReason } from '@/lib/smart-wallet/revert-decode';
 import { Me } from '@/providers/auth-provider';
@@ -449,6 +450,15 @@ export function usePrivateCard(me: Me | null) {
             });
             setSelectedCardAddressState(card.address);
 
+            if (me?.account) {
+                addConfirmedActivity(me.account, {
+                    type: 'card_linked',
+                    token: card.address.slice(0, 10) + '...',
+                    txHash: undefined,
+                    userOpHash: undefined,
+                });
+            }
+
             toast.success(
                 sameAddress(card.owner, me?.account)
                     ? 'Card attached to your list.'
@@ -514,7 +524,14 @@ export function usePrivateCard(me: Me | null) {
         }
 
         toast.success('Card removed from this device list.');
-    }, [selectedCardAddressState]);
+
+        if (me?.account) {
+            addConfirmedActivity(me.account, {
+                type: 'card_unlinked',
+                token: normalizedAddress.slice(0, 10) + '...',
+            });
+        }
+    }, [selectedCardAddressState, me?.account]);
 
     const createCard = useCallback(async () => {
         if (!me) return;
@@ -547,23 +564,28 @@ export function usePrivateCard(me: Me | null) {
                     userOp: candidate,
                 });
                 const hash = await smartWallet.sendUserOperation({ userOp: candidate });
-                return smartWallet.waitForUserOperationReceipt({ hash });
+                return { hash, receipt: await smartWallet.waitForUserOperationReceipt({ hash }) };
             };
 
             const userOp = hardenCreateCardUserOpGas(baseUserOp);
             let receipt: any;
+            let hash: string | undefined;
             let usedFallbackGas = false;
             try {
-                receipt = await submit(userOp);
+                const result = await submit(userOp);
+                receipt = result.receipt;
+                hash = result.hash;
             } catch (error) {
                 if (!isRetryableUserOpGasError(error)) {
                     throw error;
                 }
                 usedFallbackGas = true;
-                receipt = await submit(bumpCreateCardUserOpGas(userOp));
+                const result = await submit(bumpCreateCardUserOpGas(userOp));
+                receipt = result.receipt;
+                hash = result.hash;
             }
 
-            console.log('[createCard] userOp receipt:', receipt);
+            console.log('[createCard] userOp receipt:', receipt, 'hash:', hash);
 
             if (typeof window !== 'undefined') {
                 try { window.localStorage.setItem('payme.lastCreateReceipt', JSON.stringify(receipt)); } catch { void 0; }
@@ -577,6 +599,18 @@ export function usePrivateCard(me: Me | null) {
                 await refetch();
                 console.log('[createCard] card created at', createdCard);
                 toast.success('Private Card successfully created!');
+                
+                console.log('[createCard] Recording activity for wallet:', me?.account);
+                if (me?.account) {
+                    addConfirmedActivity(me.account, {
+                        type: 'card_created',
+                        token: createdCard.slice(0, 10) + '...',
+                        txHash: receipt?.receipt?.transactionHash,
+                        userOpHash: hash,
+                    });
+                } else {
+                    console.log('[createCard] ERROR: me.account is undefined!');
+                }
             };
 
             const createdFromReceipt = extractCreatedCardFromReceipt(receipt);
@@ -638,6 +672,13 @@ export function usePrivateCard(me: Me | null) {
                 await refetch();
                 console.log('[createCard] card created at', found);
                 toast.success("Private Card successfully created!");
+
+                if (me?.account) {
+                    addConfirmedActivity(me.account, {
+                        type: 'card_created',
+                        token: found.slice(0, 10) + '...',
+                    });
+                }
             } else {
                 const reason = extractUserOpFailureReason(receipt);
                 throw new Error(

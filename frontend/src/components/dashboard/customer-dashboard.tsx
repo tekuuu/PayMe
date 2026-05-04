@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SendTokenCard } from '@/components/smart-wallet/send-token-card';
 import { ReceiveTokenCard } from '@/components/smart-wallet/receive-token-card';
 import { ShieldCard } from '@/components/smart-wallet/shield-card';
@@ -16,6 +15,7 @@ import {
   IconEye,
   IconEyeOff,
   IconCheck,
+  IconRefresh,
 } from '@tabler/icons-react';
 import SmartWalletOnboarding from '@/components/auth/smart-wallet-onboarding';
 import { Button } from '@/components/ui/button';
@@ -134,6 +134,7 @@ export default function CustomerDashboardPage() {
   } = useConfidentialTokenBalance(me?.account);
 
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [activeAction, setActiveAction] = useState<string | null>(null);
 
   const toggleRow = (id: string) => {
     setExpandedRows((prev) => {
@@ -199,24 +200,115 @@ export default function CustomerDashboardPage() {
   ];
 
   return (
-    <div className='flex-1 space-y-6 p-6'>
+    <div className='flex-1 space-y-4 p-6'>
       {/* Header */}
-      <div className='flex items-center justify-between'>
-        <h2 className='text-2xl font-semibold tracking-tight text-foreground'>
-          Dashboard
-        </h2>
-        <div className='flex items-center gap-2'>
-          <NetworkSelector />
-          <Button
-            variant='outline'
-            className='rounded-full border border-border/60 bg-background/50 px-4 py-2 text-sm'
-            onClick={() => refetch()}
+      <div className='space-y-1'>
+        <h2 className='text-2xl font-semibold tracking-tight text-foreground'>Dashboard</h2>
+      </div>
+      <div className='h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
+
+      {/* Treasury Overview */}
+      <div className='mx-auto max-w-3xl rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+        <div className='absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/[0.04] via-transparent to-primary/[0.02] opacity-0 group-hover:opacity-100 transition-opacity duration-500' />
+        <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+        <div className='absolute top-0 bottom-0 left-0 w-px bg-gradient-to-b from-primary/15 via-transparent to-transparent rounded-l-2xl' />
+        <div className='absolute top-0 bottom-0 right-0 w-px bg-gradient-to-b from-transparent via-primary/10 to-transparent rounded-r-2xl' />
+        <div className='relative p-6 min-h-[280px] flex flex-col justify-center'>
+          <button
+            onClick={async () => {
+              await Promise.all([
+                refetch?.(),
+                balances.refetch?.(),
+              ]);
+            }}
             disabled={isFetching}
+            className='absolute top-4 right-4 rounded-lg p-2 text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/40 disabled:opacity-40'
+            title='Refresh balances'
           >
-            {isFetching ? 'Refreshing...' : 'Refresh'}
-          </Button>
+            <IconRefresh size={16} className={isFetching ? 'animate-spin' : ''} />
+          </button>
+
+          <div className='space-y-6'>
+            <div className='space-y-2'>
+              <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Plain Assets</p>
+              <p className='text-4xl font-bold text-foreground tabular-nums'>${formatMicros(balances.usdc.balance as bigint | undefined)}</p>
+            </div>
+
+            <div className='space-y-2'>
+              <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Encrypted</p>
+              <div className='flex items-center gap-2'>
+                <p className='text-4xl font-bold text-blue-500 tabular-nums'>
+                  {decryptedValue !== undefined ? `$${formatMicros(decryptedValue)}` : '••••••'}
+                </p>
+                {decryptedValue === undefined && (
+                  <button
+                    onClick={() => decryptWithAclSync()}
+                    disabled={!canDecrypt || isDecrypting || !handleHex}
+                    className='rounded-lg p-2 transition-colors hover:bg-muted/40 disabled:opacity-40'
+                  >
+                    {isDecrypting ? <IconEyeOff size={16} className='animate-spin text-muted-foreground' /> : <IconEye size={16} className='text-muted-foreground' />}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Wallet Actions */}
+      <div className='mx-auto max-w-3xl rounded-xl border border-border/60 bg-card/50 backdrop-blur overflow-hidden'>
+        <div className='px-6 py-4 border-b border-border/40'>
+          <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Wallet Actions</p>
+        </div>
+
+        <div className='flex items-center gap-3 p-6'>
+          <Button
+            variant='outline'
+            className={`flex-1 rounded-full border border-border/60 gap-2 ${activeAction === 'send' ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground' : 'bg-background/50 hover:bg-muted/40'}`}
+            onClick={() => setActiveAction(activeAction === 'send' ? null : 'send')}
+          >
+            Send
+          </Button>
+          <Button
+            variant='outline'
+            className={`flex-1 rounded-full border border-border/60 gap-2 ${activeAction === 'receive' ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground' : 'bg-background/50 hover:bg-muted/40'}`}
+            onClick={() => setActiveAction(activeAction === 'receive' ? null : 'receive')}
+          >
+            Receive
+          </Button>
+          <Button
+            variant='outline'
+            className={`flex-1 rounded-full border border-border/60 gap-2 ${activeAction === 'shield' ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground' : 'bg-background/50 hover:bg-muted/40'}`}
+            onClick={() => setActiveAction(activeAction === 'shield' ? null : 'shield')}
+          >
+            Shield
+          </Button>
+        </div>
+
+        {activeAction === 'send' && (
+          <div className='border-t border-border/40 bg-background/30 p-6'>
+            <SendTokenCard me={me} />
+          </div>
+        )}
+
+        {activeAction === 'receive' && (
+          <div className='border-t border-border/40 bg-background/30 p-6'>
+            <ReceiveTokenCard address={me.account} />
+          </div>
+        )}
+
+        {activeAction === 'shield' && (
+          <div className='border-t border-border/40 bg-background/30 p-6'>
+            <ShieldCard me={me} />
+          </div>
+        )}
+      </div>
+
+      {(decryptError || serverSignerError) && (
+        <p className='text-sm text-rose-500 text-center'>
+          {decryptError || serverSignerError}
+        </p>
+      )}
 
       {/* Asset list */}
       <div className='mx-auto max-w-3xl space-y-2'>
@@ -327,44 +419,6 @@ export default function CustomerDashboardPage() {
           {decryptError || serverSignerError}
         </p>
       )}
-
-      {/* Actions */}
-      <div className='mx-auto max-w-3xl rounded-xl border border-border/60 bg-card/50 backdrop-blur p-6'>
-        <p className='text-xs uppercase tracking-wide text-muted-foreground mb-4'>
-          Actions
-        </p>
-        <Tabs defaultValue='send' className='space-y-4'>
-          <TabsList className='inline-flex h-10 w-auto items-center justify-center rounded-full bg-muted/40 p-1'>
-            <TabsTrigger
-              value='send'
-              className='rounded-full px-4 py-1.5 text-sm font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm'
-            >
-              Send
-            </TabsTrigger>
-            <TabsTrigger
-              value='receive'
-              className='rounded-full px-4 py-1.5 text-sm font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm'
-            >
-              Receive
-            </TabsTrigger>
-            <TabsTrigger
-              value='shield'
-              className='rounded-full px-4 py-1.5 text-sm font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm'
-            >
-              Shield
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value='send' className='mt-0'>
-            <SendTokenCard me={me} />
-          </TabsContent>
-          <TabsContent value='receive' className='mt-0'>
-            <ReceiveTokenCard address={me.account} />
-          </TabsContent>
-          <TabsContent value='shield' className='mt-0'>
-            <ShieldCard me={me} />
-          </TabsContent>
-        </Tabs>
-      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { getAddress, isAddress, keccak256, stringToHex } from 'viem';
 import type {
   BillingAttempt,
   BillingCycle,
+  CustomerActivity,
   EventLedgerItem,
   MerchantControlPlaneState,
   MerchantMetrics,
@@ -21,6 +22,7 @@ const DEFAULT_RETRY_WINDOWS = [10, 60, 360, 1440, 4320];
 const DEFAULT_MAX_ATTEMPTS = 5;
 const STORAGE_PREFIX = 'payme.merchant.control-plane.';
 const CUSTOMER_CARD_INDEX_PREFIX = 'payme.customer.cardSubscriptions.';
+const CUSTOMER_ACTIVITY_PREFIX = 'payme.customer.activity.';
 export const MERCHANT_CONTROL_PLANE_EVENT = 'payme:merchant-control-plane-updated';
 
 type PartialRecoveryPolicy = Partial<RecoveryPolicy>;
@@ -117,6 +119,10 @@ function customerCardIndexKey(customerCardAddress: string) {
   return `${CUSTOMER_CARD_INDEX_PREFIX}${customerCardAddress.toLowerCase()}`;
 }
 
+function customerActivityKey(customerCardAddress: string) {
+  return `${CUSTOMER_ACTIVITY_PREFIX}${customerCardAddress.toLowerCase()}`;
+}
+
 function addMerchantToCustomerCardIndex(customerCardAddress: string, merchantAddress: string) {
   if (typeof window === 'undefined') {
     return;
@@ -128,6 +134,163 @@ function addMerchantToCustomerCardIndex(customerCardAddress: string, merchantAdd
     new Set([...current.map((entry) => entry.toLowerCase()), merchantAddress.toLowerCase()])
   );
   window.localStorage.setItem(key, JSON.stringify(merged));
+}
+
+export function recordCustomerActivity(
+  customerCardAddress: string,
+  activity: Omit<CustomerActivity, 'id' | 'createdAt'>
+): string {
+  let createdId = '';
+  const addrLower = customerCardAddress.toLowerCase();
+
+  if (typeof window === 'undefined') {
+    console.log('[recordCustomerActivity] SSR mode, returning empty');
+    return createdId;
+  }
+
+  const key = `payme.customer.activity.${addrLower}`;
+  console.log('[recordCustomerActivity] Using key:', key);
+
+  const raw = window.localStorage.getItem(key);
+  const activities: CustomerActivity[] = raw ? JSON.parse(raw) : [];
+  console.log('[recordCustomerActivity] Current activities count:', activities.length);
+
+  const newActivity: CustomerActivity = {
+    ...activity,
+    id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+    createdAt: new Date().toISOString(),
+  };
+
+  createdId = newActivity.id;
+  activities.unshift(newActivity);
+
+  const trimmed = activities.slice(0, 100);
+  window.localStorage.setItem(key, JSON.stringify(trimmed));
+  console.log('[recordCustomerActivity] Saved activity:', newActivity.type, 'id:', createdId);
+
+  return createdId;
+}
+
+export function addConfirmedActivity(
+  customerCardAddress: string,
+  activity: Omit<CustomerActivity, 'id' | 'createdAt' | 'status' | 'confirmedAt'>
+): void {
+  console.log('[addConfirmedActivity] Called with address:', customerCardAddress, 'activity:', activity);
+  const addrLower = customerCardAddress.toLowerCase();
+
+  if (typeof window === 'undefined') {
+    console.log('[addConfirmedActivity] SSR mode, returning');
+    return;
+  }
+
+  const key = `payme.customer.activity.${addrLower}`;
+  console.log('[addConfirmedActivity] Using key:', key);
+  const raw = window.localStorage.getItem(key);
+  const activities: CustomerActivity[] = raw ? JSON.parse(raw) : [];
+
+  const newActivity: CustomerActivity = {
+    ...activity,
+    status: 'confirmed',
+    id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+    createdAt: new Date().toISOString(),
+    confirmedAt: new Date().toISOString(),
+  };
+
+  activities.unshift(newActivity);
+
+  const trimmed = activities.slice(0, 100);
+  window.localStorage.setItem(key, JSON.stringify(trimmed));
+  console.log('[addConfirmedActivity] Saved confirmed activity:', newActivity.type, 'Total activities:', trimmed.length);
+}
+
+export function confirmCustomerActivity(
+  customerCardAddress: string,
+  activityId: string,
+  txHash?: string,
+  userOpHash?: string
+): void {
+  const addrLower = customerCardAddress.toLowerCase();
+
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const key = `payme.customer.activity.${addrLower}`;
+  const raw = window.localStorage.getItem(key);
+  const activities: CustomerActivity[] = raw ? JSON.parse(raw) : [];
+
+  let idx = -1;
+  if (activityId) {
+    idx = activities.findIndex((a) => a.id === activityId);
+  } else {
+    const pendingIdx = activities.findIndex((a) => a.status === 'pending');
+    if (pendingIdx !== -1) {
+      idx = pendingIdx;
+    }
+  }
+
+  if (idx !== -1) {
+    console.log('[confirmCustomerActivity] Confirming activity at idx:', idx);
+    activities[idx] = {
+      ...activities[idx],
+      status: 'confirmed',
+      confirmedAt: new Date().toISOString(),
+      txHash: activities[idx].txHash || txHash,
+      userOpHash: activities[idx].userOpHash || userOpHash,
+    };
+    window.localStorage.setItem(key, JSON.stringify(activities));
+    console.log('[confirmCustomerActivity] Activity confirmed');
+  } else {
+    console.log('[confirmCustomerActivity] No pending activity found to confirm');
+  }
+}
+
+export function failCustomerActivity(
+  customerCardAddress: string,
+  activityId: string,
+  failureReason: string
+): void {
+  const addrLower = customerCardAddress.toLowerCase();
+
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const key = `payme.customer.activity.${addrLower}`;
+  const raw = window.localStorage.getItem(key);
+  const activities: CustomerActivity[] = raw ? JSON.parse(raw) : [];
+
+  let idx = -1;
+  if (activityId) {
+    idx = activities.findIndex((a) => a.id === activityId);
+  } else {
+    const pendingIdx = activities.findIndex((a) => a.status === 'pending');
+    if (pendingIdx !== -1) {
+      idx = pendingIdx;
+    }
+  }
+
+  if (idx !== -1) {
+    activities[idx] = {
+      ...activities[idx],
+      status: 'failed',
+      failureReason,
+      confirmedAt: new Date().toISOString(),
+    };
+    window.localStorage.setItem(key, JSON.stringify(activities));
+  }
+}
+
+export function listCustomerActivities(customerCardAddress: string): CustomerActivity[] {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+
+  const key = `payme.customer.activity.${customerCardAddress.toLowerCase()}`;
+  const raw = window.localStorage.getItem(key);
+  const result = raw ? JSON.parse(raw) : [];
+  console.log('[listCustomerActivities] Key:', key, 'found:', result.length);
+  return result;
 }
 
 function defaultRecoveryPolicy(): RecoveryPolicy {
@@ -1261,6 +1424,12 @@ export function formatMicrosToCurrency(value: bigint | string, decimals = 6) {
   const base = 10n ** BigInt(decimals);
   const whole = abs / base;
   const fraction = abs % base;
-  const fractionText = fraction.toString().padStart(decimals, '0').replace(/0+$/, '');
-  return fractionText.length > 0 ? `${sign}${whole.toString()}.${fractionText}` : `${sign}${whole.toString()}`;
+  let fractionText = fraction.toString().padStart(decimals, '0');
+  const trimmed = fractionText.replace(/0+$/, '');
+  if (trimmed.length < 2) {
+    fractionText = trimmed.padEnd(2, '0');
+  } else {
+    fractionText = trimmed;
+  }
+  return `${sign}${whole.toString()}.${fractionText}`;
 }

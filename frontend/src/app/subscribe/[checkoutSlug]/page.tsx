@@ -21,7 +21,7 @@ import { UserOpBuilder } from '@/lib/smart-wallet/service/userOps';
 import { ensureUserOpPrefund } from '@/lib/smart-wallet/service/userOps/prefund';
 import { describeExecutionRevertReason } from '@/lib/smart-wallet/revert-decode';
 import { decodeCheckoutSlug } from '@/lib/merchant/checkout-slug';
-import { registerSubscriptionApproval, formatMicrosToCurrency } from '@/lib/merchant/control-plane-store';
+import { registerSubscriptionApproval, formatMicrosToCurrency, recordCustomerActivity, confirmCustomerActivity, addConfirmedActivity } from '@/lib/merchant/control-plane-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -276,6 +276,15 @@ export default function SubscribeCheckoutPage() {
       }
 
       const amountHandle = toHex(handles[0], { size: 32 });
+      addConfirmedActivity(cardAddress, {
+        type: 'subscribe',
+        amount: maxAllowance,
+        token: 'cUSDC',
+        merchantAddress: chainPlan.merchant as string,
+        planName: payload.name || 'Plan',
+        txHash: receipt.receipt?.transactionHash as string | undefined,
+        userOpHash,
+      });
       registerSubscriptionApproval({
         merchantAddress: chainPlan.merchant as Hex,
         customerCardAddress: cardAddress,

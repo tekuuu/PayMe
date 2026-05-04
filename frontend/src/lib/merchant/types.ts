@@ -155,3 +155,36 @@ export type RecoveryQueueItem = {
   latestAttempt: BillingAttempt | null;
   priorityScore: number;
 };
+
+export type CustomerActivityType =
+  | 'shield'
+  | 'unshield'
+  | 'send'
+  | 'subscribe'
+  | 'cancel_subscription'
+  | 'pause_subscription'
+  | 'resume_subscription'
+  | 'card_created'
+  | 'card_linked'
+  | 'card_unlinked'
+  | 'payment_received';
+
+export type CustomerActivityStatus = 'pending' | 'confirmed' | 'failed';
+
+export type CustomerActivity = {
+  id: string;
+  type: CustomerActivityType;
+  status: CustomerActivityStatus;
+  amount?: string;
+  token?: string;
+  counterpartyAddress?: string;
+  merchantAddress?: string;
+  planName?: string;
+  subscriptionId?: string;
+  txHash?: string;
+  userOpHash?: string;
+  failureReason?: string;
+  metadata?: Record<string, string>;
+  createdAt: string;
+  confirmedAt?: string;
+};

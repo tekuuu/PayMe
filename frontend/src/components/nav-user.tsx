@@ -9,7 +9,6 @@ import {
   IconSparkles
 } from '@tabler/icons-react';
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -67,122 +66,107 @@ export function NavUser({
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <div className="flex items-center gap-2 px-2 py-1.5">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant='ghost' className='relative h-8 w-8 rounded-full focus-visible:ring-primary/20 p-0'>
-                <Avatar className='h-8 w-8'>
-                  <AvatarImage src={avatarUrl} alt="User Avatar" />
-                  <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground font-bold text-xs">
-                    {me?.account ? me.account.slice(2, 4).toUpperCase() : '??'}
-                  </AvatarFallback>
-                </Avatar>
-                {me?.account && (
-                  <span className='absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-background bg-green-500 shadow-sm' />
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              className='w-64 rounded-lg'
-              side={isMobile ? 'bottom' : 'right'}
-              align='end'
-              sideOffset={10}
-            >
-              <DropdownMenuLabel className='font-normal'>
-                <div className='flex flex-col space-y-1'>
-                  <div className='flex items-center justify-between'>
-                    <p className='text-sm leading-none font-medium'>
-                      {truncatedAddress}
-                    </p>
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      className='h-6 w-6 p-0 hover:bg-muted'
-                      onClick={() => me?.account && copyToClipboard(me.account)}
-                    >
-                      {copied ? (
-                        <IconCircleCheck className='h-3 w-3 text-green-500' />
-                      ) : (
-                        <IconCopy className='h-3 w-3' />
-                      )}
-                    </Button>
-                  </div>
-                  <p className='text-muted-foreground text-xs leading-none uppercase tracking-wider'>
-                    Smart Wallet
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant='ghost' className='relative h-8 w-8 rounded-full p-0 hover:bg-accent'>
+              <div className='h-8 w-8 rounded-full overflow-hidden ring-2 ring-indigo-500/50'>
+                <img src={avatarUrl} alt='Avatar' className='h-full w-full object-cover' />
+              </div>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            className='w-64 rounded-lg'
+            side={isMobile ? 'bottom' : 'right'}
+            align='end'
+            sideOffset={10}
+          >
+            <DropdownMenuLabel className='font-normal'>
+              <div className='flex flex-col space-y-1'>
+                <div className='flex items-center justify-between'>
+                  <p className='text-sm leading-none font-medium'>
+                    {truncatedAddress}
                   </p>
-                  <div className='flex flex-col space-y-1 mt-2 pt-2 border-t border-border'>
-                    <div className='flex justify-between items-center text-xs'>
-                      <span className='text-muted-foreground'>ETH (total)</span>
-                      <span className='font-medium'>{balances.eth.formatted}</span>
-                    </div>
-                    <div className='flex justify-between items-center text-xs'>
-                      <span className='text-muted-foreground'>Wallet ETH</span>
-                      <span className='font-medium'>{balances.eth.walletFormatted}</span>
-                    </div>
-                    <div className='flex justify-between items-center text-xs'>
-                      <span className='text-muted-foreground'>AA Deposit</span>
-                      <span className='font-medium'>{balances.eth.depositFormatted}</span>
-                    </div>
-                    <div className='flex justify-between items-center text-xs'>
-                      <span className='text-muted-foreground'>USDC</span>
-                      <span className='font-medium'>{balances.usdc.formatted}</span>
-                    </div>
-                    <div className='flex justify-between items-center text-xs'>
-                      <span className='text-muted-foreground'>WETH</span>
-                      <span className='font-medium'>{balances.weth.formatted}</span>
-                    </div>
+                  <Button
+                    variant='ghost'
+                    size='sm'
+                    className='h-6 w-6 p-0 hover:bg-muted'
+                    onClick={() => me?.account && copyToClipboard(me.account)}
+                  >
+                    {copied ? (
+                      <IconCircleCheck className='h-3 w-3 text-green-500' />
+                    ) : (
+                      <IconCopy className='h-3 w-3' />
+                    )}
+                  </Button>
+                </div>
+                <div className='flex flex-col space-y-1 mt-2 pt-2 border-t border-border'>
+                  <div className='flex justify-between items-center text-xs'>
+                    <span className='text-muted-foreground'>ETH (total)</span>
+                    <span className='font-medium'>{balances.eth.formatted}</span>
+                  </div>
+                  <div className='flex justify-between items-center text-xs'>
+                    <span className='text-muted-foreground'>Wallet ETH</span>
+                    <span className='font-medium'>{balances.eth.walletFormatted}</span>
+                  </div>
+                  <div className='flex justify-between items-center text-xs'>
+                    <span className='text-muted-foreground'>AA Deposit</span>
+                    <span className='font-medium'>{balances.eth.depositFormatted}</span>
+                  </div>
+                  <div className='flex justify-between items-center text-xs'>
+                    <span className='text-muted-foreground'>USDC</span>
+                    <span className='font-medium'>{balances.usdc.formatted}</span>
+                  </div>
+                  <div className='flex justify-between items-center text-xs'>
+                    <span className='text-muted-foreground'>WETH</span>
+                    <span className='font-medium'>{balances.weth.formatted}</span>
                   </div>
                 </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                {isBusiness ? (
-                  <>
-                    <DropdownMenuItem onClick={() => router.push('/merchant')}>
-                      <IconLayoutDashboard className='mr-3 h-4 w-4' />
-                      Overview
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push('/merchant/billing-cycles')}>
-                      <IconCircleCheck className='mr-3 h-4 w-4' />
-                      Billing Cycles
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push('/merchant/recovery')}>
-                      <IconSparkles className='mr-3 h-4 w-4' />
-                      Recovery
-                    </DropdownMenuItem>
-                  </>
-                ) : (
-                  <>
-                    <DropdownMenuItem onClick={() => router.push('/dashboard/activity')}>
-                      <IconCircleCheck className='mr-3 h-4 w-4' />
-                      Activity
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push('/dashboard/my-card')}>
-                      <IconCreditCard className='mr-3 h-4 w-4' />
-                      My Card
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
-                      <IconSparkles className='mr-3 h-4 w-4' />
-                      Settings
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:bg-destructive/10 focus:text-destructive"
-                onClick={() => disconnect()}
-              >
-                <IconLogout className='mr-3 h-4 w-4' />
-                Disconnect Wallet
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <div className='grid flex-1 text-left text-sm leading-tight'>
-            <span className='truncate font-semibold'>{truncatedAddress}</span>
-            <span className='truncate text-xs text-muted-foreground uppercase tracking-wider'>Smart Wallet</span>
-          </div>
-        </div>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              {isBusiness ? (
+                <>
+                  <DropdownMenuItem onClick={() => router.push('/merchant')}>
+                    <IconLayoutDashboard className='mr-3 h-4 w-4' />
+                    Overview
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => router.push('/merchant/billing-cycles')}>
+                    <IconCircleCheck className='mr-3 h-4 w-4' />
+                    Billing Cycles
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => router.push('/merchant/recovery')}>
+                    <IconSparkles className='mr-3 h-4 w-4' />
+                    Recovery
+                  </DropdownMenuItem>
+                </>
+              ) : (
+                <>
+                  <DropdownMenuItem onClick={() => router.push('/dashboard/activity')}>
+                    <IconCircleCheck className='mr-3 h-4 w-4' />
+                    Activity
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => router.push('/dashboard/my-card')}>
+                    <IconCreditCard className='mr-3 h-4 w-4' />
+                    My Card
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
+                    <IconSparkles className='mr-3 h-4 w-4' />
+                    Settings
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+              onClick={() => disconnect()}
+            >
+              <IconLogout className='mr-3 h-4 w-4' />
+              Disconnect Wallet
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </SidebarMenuItem>
     </SidebarMenu>
   );

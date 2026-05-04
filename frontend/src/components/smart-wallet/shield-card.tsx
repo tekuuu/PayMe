@@ -16,6 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { AlertCircle, ArrowRightLeft, Loader2, Clock, CheckCircle2 } from 'lucide-react';
 import { encodeFunctionData, Hex, parseUnits, toHex, bytesToHex, isAddress } from 'viem';
 import { describeExecutionRevertReason } from '@/lib/smart-wallet/revert-decode';
+import { recordCustomerActivity, confirmCustomerActivity, addConfirmedActivity } from '@/lib/merchant/control-plane-store';
 import { toast } from 'sonner';
 
 const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
@@ -374,6 +375,15 @@ export function ShieldCard({ me }: { me: Me }) {
       if (txHash) {
         setLastMode('unshield');
         setSuccessTxHash(txHash);
+        const sender = me.account as Hex;
+        confirmCustomerActivity(sender, '', txHash, receipt.userOpHash as string | undefined);
+        addConfirmedActivity(sender, {
+          type: 'unshield',
+          amount: pendingUnwrap.amount,
+          token: 'cUSDC',
+          txHash,
+          userOpHash: receipt.userOpHash as string | undefined,
+        });
       }
       
       toast.success(`${pendingUnwrap.amount} USDC received!`);
@@ -395,6 +405,9 @@ export function ShieldCard({ me }: { me: Me }) {
     setError(null);
     setRawError(null);
     setStep(null);
+
+    const sender = me.account as Hex;
+    console.log('[Shield] Starting', isShielding ? ' shield' : 'unshield', 'amount:', amount);
 
     if (!amount || Number(amount) <= 0) {
       setError('Please enter a valid amount.');
@@ -425,8 +438,6 @@ export function ShieldCard({ me }: { me: Me }) {
 
       // Yield to browser so React can render the loading state
       await new Promise((r) => setTimeout(r, 0));
-
-      const sender = me.account as Hex;
 
       if (isShielding) {
         setStep('approve');
@@ -533,6 +544,14 @@ export function ShieldCard({ me }: { me: Me }) {
         setError(null);
         setRawError(null);
         toast.success(`Successfully shielded ${amount} USDC → cUSDC`);
+        confirmCustomerActivity(sender, '', txHash, wrapHash);
+        addConfirmedActivity(sender, {
+          type: 'shield',
+          amount: amount,
+          token: 'USDC',
+          txHash,
+          userOpHash: wrapHash,
+        });
       } else {
         if (!instance) {
           throw new Error('FHE engine not ready');

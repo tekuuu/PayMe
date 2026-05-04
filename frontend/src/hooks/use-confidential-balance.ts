@@ -22,7 +22,7 @@ const WRAPPER_READ_ABI = [
 export function useConfidentialBalance(cardAddress: Hex | undefined, ownerAddress: Hex | undefined) {
     const { me } = useMe();
     const { instance } = useFhevmContext();
-    const { ethersSigner, chainId } = useWagmiEthers();
+    const { chainId } = useWagmiEthers();
     const { storage: fhevmDecryptionSignatureStorage } = useInMemoryStorage();
 
     const callerAddress = ownerAddress || (me?.account as Hex | undefined);
@@ -100,8 +100,9 @@ export function useConfidentialBalance(cardAddress: Hex | undefined, ownerAddres
         } as any;
     }, [serverSignerAddress]);
 
-    // Relayer user-decrypt currently requires secp256k1/65-byte ECDSA signatures.
-    const decryptionSigner = ethersSigner ?? serverSigner;
+    // Always prefer server signer (relayer with passkey) for decrypt
+    // NEVER fallback to ethersSigner (browser wallet like Rabby)
+    const decryptionSigner = serverSigner;
 
     const { data: cardCusdcAddress } = useReadContract({
         address: cardAddress,
@@ -253,7 +254,7 @@ export function useConfidentialBalance(cardAddress: Hex | undefined, ownerAddres
         wrapperAddress: cardCusdcAddress as Hex | undefined,
         hasSigner: !!decryptionSigner,
         decryptSignerAddress: serverSignerAddress,
-        usingServerSigner: !ethersSigner && !!serverSigner,
+        usingServerSigner: true,
         serverSignerError,
         hasFheInstance: !!instance,
         decryptedValue,
