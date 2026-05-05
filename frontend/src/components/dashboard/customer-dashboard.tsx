@@ -183,13 +183,6 @@ export default function CustomerDashboardPage() {
       icon: '/assets/icons/tokens/usdc.svg',
     },
     {
-      id: 'weth',
-      name: 'Wrapped Ether',
-      symbol: 'WETH',
-      balance: formatBalanceDisplay(balances.weth.formatted),
-      icon: '/assets/icons/tokens/weth.svg',
-    },
-    {
       id: 'cusdc',
       name: 'Confidential USDC',
       symbol: 'cUSDC',

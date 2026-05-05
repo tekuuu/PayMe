@@ -28,7 +28,7 @@ type RecentRecipient = {
 };
 
 type TokenOption = {
-  symbol: 'ETH' | 'USDC' | 'WETH';
+  symbol: 'ETH' | 'USDC';
   name: string;
   address: Hex | null;
   decimals: number;
@@ -41,12 +41,6 @@ const TOKENS: TokenOption[] = [
     name: 'USD Coin',
     address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' as Hex,
     decimals: 6,
-  },
-  {
-    symbol: 'WETH',
-    name: 'Wrapped Ether',
-    address: '0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9' as Hex,
-    decimals: 18,
   },
 ];
 

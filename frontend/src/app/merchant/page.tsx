@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Clock3, CreditCard, ShieldCheck, Users, Folder, Loader2, Eye, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
+import { ArrowRight, Loader2, Eye, RefreshCw } from 'lucide-react';
 import { useMe } from '@/providers/auth-provider';
 import { useMerchantControlPlane } from '@/hooks/use-merchant-control-plane';
 import { formatMicrosToCurrency } from '@/lib/merchant/control-plane-store';
@@ -13,76 +13,6 @@ import { SendTokenCard } from '@/components/smart-wallet/send-token-card';
 import { ReceiveTokenCard } from '@/components/smart-wallet/receive-token-card';
 import { ShieldCard } from '@/components/smart-wallet/shield-card';
 import type { Hex } from 'viem';
-
-function AssetBalanceRow({
-  label,
-  symbol,
-  balance,
-  subLabel,
-  isEncrypted,
-  children,
-  onDecrypt,
-  canDecrypt,
-  isDecrypting,
-  hasHandle,
-}: {
-  label: string;
-  symbol: string;
-  balance: string;
-  subLabel: string;
-  isEncrypted: boolean;
-  children: React.ReactNode;
-  onDecrypt?: () => void;
-  canDecrypt?: boolean;
-  isDecrypting?: boolean;
-  hasHandle?: boolean;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <div className='border-b border-border/30 last:border-b-0'>
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className='flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-muted/20'
-      >
-        <div className='flex items-center gap-3'>
-          <div className={`h-8 w-8 rounded-full flex items-center justify-center ${isEncrypted ? 'bg-primary/10' : 'bg-muted/30'}`}>
-            <span className={`text-[10px] font-bold ${isEncrypted ? 'text-primary' : 'text-muted-foreground'}`}>
-              {isEncrypted ? 'c$' : symbol.slice(0, 2)}
-            </span>
-          </div>
-          <div>
-            <div className='flex items-center gap-2'>
-              <p className='text-sm font-medium'>{label}</p>
-              {isEncrypted && (
-                <span className='rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[9px] font-medium text-primary'>FHE</span>
-              )}
-            </div>
-            <p className='text-xs text-muted-foreground'>{subLabel}</p>
-          </div>
-        </div>
-        <div className='flex items-center gap-2'>
-          <span className='text-sm font-semibold tabular-nums'>{balance}</span>
-          {isEncrypted && onDecrypt && balance === 'Encrypted' && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onDecrypt(); }}
-              disabled={!canDecrypt || isDecrypting || !hasHandle}
-              className='rounded-md p-1 transition-colors hover:bg-muted/40 disabled:opacity-30'
-              title='Decrypt balance'
-            >
-              {isDecrypting ? <Loader2 size={14} className='animate-spin text-muted-foreground' /> : <Eye size={14} className='text-muted-foreground' />}
-            </button>
-          )}
-          {expanded ? <ChevronUp size={14} className='text-muted-foreground' /> : <ChevronDown size={14} className='text-muted-foreground' />}
-        </div>
-      </button>
-      {expanded && (
-        <div className='border-t border-border/30 bg-background/30 px-4 py-3'>
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function metricCard(title: string, value: string, tone?: 'default' | 'danger' | 'warning') {
   const toneClass =
@@ -100,13 +30,7 @@ function metricCard(title: string, value: string, tone?: 'default' | 'danger' | 
   );
 }
 
-function trimAmount(value: string, maxFractionDigits = 4) {
-  if (!value) return '0';
-  const [whole, fraction = ''] = value.split('.');
-  if (!fraction) return whole;
-  const trimmed = fraction.slice(0, maxFractionDigits).replace(/0+$/, '');
-  return trimmed ? `${whole}.${trimmed}` : whole;
-}
+
 
 export default function MerchantPage() {
   const { me } = useMe();
@@ -126,9 +50,6 @@ export default function MerchantPage() {
 
   const mrrText = metrics ? formatMicrosToCurrency(metrics.mrrProxyMicros) : '0';
   const plainUsdcRaw = (balances.usdc.balance as bigint | undefined) ?? 0n;
-  const decryptedCusdcRaw = decryptedValue ?? 0n;
-  const stableVisibleRaw = plainUsdcRaw + decryptedCusdcRaw;
-  const stableVisibleText = formatMicrosToCurrency(stableVisibleRaw);
 
   return (
     <div className='flex-1 space-y-4 p-6'>
@@ -306,56 +227,6 @@ export default function MerchantPage() {
               ))}
             </div>
           )}
-        </div>
-
-        <div className='grid grid-cols-2 gap-3'>
-          <Link href='/merchant/plans' className='flex items-center justify-between rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5 transition-colors hover:bg-muted/30'>
-            <div className='flex items-center gap-3'>
-              <Folder className='h-5 w-5 text-primary' />
-              <h3 className='font-semibold text-foreground'>Plans</h3>
-            </div>
-            <ArrowRight className='h-4 w-4 text-muted-foreground' />
-          </Link>
-
-          <Link href='/merchant/subscriptions' className='flex items-center justify-between rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5 transition-colors hover:bg-muted/30'>
-            <div className='flex items-center gap-3'>
-              <Clock3 className='h-5 w-5 text-primary' />
-              <h3 className='font-semibold text-foreground'>Subscribers</h3>
-            </div>
-            <ArrowRight className='h-4 w-4 text-muted-foreground' />
-          </Link>
-
-          <Link href='/merchant/billing-cycles' className='flex items-center justify-between rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5 transition-colors hover:bg-muted/30'>
-            <div className='flex items-center gap-3'>
-              <CreditCard className='h-5 w-5 text-primary' />
-              <h3 className='font-semibold text-foreground'>Billing</h3>
-            </div>
-            <ArrowRight className='h-4 w-4 text-muted-foreground' />
-          </Link>
-
-          <Link href='/merchant/customers' className='flex items-center justify-between rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5 transition-colors hover:bg-muted/30'>
-            <div className='flex items-center gap-3'>
-              <Users className='h-5 w-5 text-primary' />
-              <h3 className='font-semibold text-foreground'>Customers</h3>
-            </div>
-            <ArrowRight className='h-4 w-4 text-muted-foreground' />
-          </Link>
-
-          <Link href='/merchant/contracts' className='flex items-center justify-between rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5 transition-colors hover:bg-muted/30'>
-            <div className='flex items-center gap-3'>
-              <ShieldCheck className='h-5 w-5 text-primary' />
-              <h3 className='font-semibold text-foreground'>Contract Controls</h3>
-            </div>
-            <ArrowRight className='h-4 w-4 text-muted-foreground' />
-          </Link>
-
-          <Link href='/merchant/integration' className='flex items-center justify-between rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5 transition-colors hover:bg-muted/30'>
-            <div className='flex items-center gap-3'>
-              <CreditCard className='h-5 w-5 text-primary' />
-              <h3 className='font-semibold text-foreground'>Integration</h3>
-            </div>
-            <ArrowRight className='h-4 w-4 text-muted-foreground' />
-          </Link>
         </div>
       </div>
     </div>

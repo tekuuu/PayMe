@@ -116,10 +116,6 @@ export function NavUser({
                     <span className='text-muted-foreground'>USDC</span>
                     <span className='font-medium'>{balances.usdc.formatted}</span>
                   </div>
-                  <div className='flex justify-between items-center text-xs'>
-                    <span className='text-muted-foreground'>WETH</span>
-                    <span className='font-medium'>{balances.weth.formatted}</span>
-                  </div>
                 </div>
               </div>
             </DropdownMenuLabel>
