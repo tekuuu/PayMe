@@ -27,8 +27,9 @@ function toAbsoluteAppOrigin() {
   return window.location.origin;
 }
 
-function intervalToSeconds(interval: PlanInterval) {
+function intervalToSeconds(interval: PlanInterval, customDays?: number) {
   if (interval === 'yearly') return 365 * 86400;
+  if (interval === 'custom' && customDays && customDays > 0) return Math.floor(customDays) * 86400;
   return 30 * 86400;
 }
 
@@ -45,12 +46,14 @@ export default function MerchantPlansPage() {
   const [name, setName] = useState('Starter');
   const [description, setDescription] = useState('');
   const [interval, setInterval] = useState<PlanInterval>('monthly');
+  const [customDays, setCustomDays] = useState('');
   const [amount, setAmount] = useState('5.00');
 
   const [editing, setEditing] = useState<MerchantPlan | null>(null);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editInterval, setEditInterval] = useState<PlanInterval>('monthly');
+  const [editCustomDays, setEditCustomDays] = useState('');
   const [editAmount, setEditAmount] = useState('');
   const [submittingAction, setSubmittingAction] = useState<'create' | 'edit' | 'archive' | null>(null);
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
@@ -78,10 +81,10 @@ export default function MerchantPlansPage() {
       return;
     }
 
-    try {
-      setSubmittingAction('create');
-      const amountMicros = parseUnits(String(amount), 6).toString();
-      const billingIntervalSeconds = intervalToSeconds(interval);
+try {
+        setSubmittingAction('create');
+        const amountMicros = parseUnits(String(amount), 6).toString();
+        const billingIntervalSeconds = intervalToSeconds(interval, Number(customDays) || undefined);
       const planRef = createPlanRef({
         merchantAddress: me.account,
         name,
@@ -130,6 +133,11 @@ export default function MerchantPlansPage() {
     setEditName(plan.name);
     setEditDescription(plan.description || '');
     setEditInterval(plan.interval || 'monthly');
+    if (plan.interval === 'custom' && plan.billingIntervalSeconds) {
+      setEditCustomDays(String(Math.floor(plan.billingIntervalSeconds / 86400)));
+    } else {
+      setEditCustomDays('');
+    }
     try {
       setEditAmount(formatMicrosToCurrency(plan.amountRefMicros || '0'));
     } catch {
@@ -155,8 +163,8 @@ export default function MerchantPlansPage() {
       setSubmittingAction('edit');
       setActivePlanId(editing.id);
 
-      const amountMicros = parseUnits(String(editAmount), 6).toString();
-      const billingIntervalSeconds = intervalToSeconds(editInterval);
+const amountMicros = parseUnits(String(editAmount), 6).toString();
+        const billingIntervalSeconds = intervalToSeconds(editInterval, Number(editCustomDays) || undefined);
       const termsHash = createPlanTermsHash({
         name: editName,
         description: editDescription,
@@ -270,20 +278,34 @@ export default function MerchantPlansPage() {
                       <SelectContent>
                         <SelectItem value='monthly'>Monthly</SelectItem>
                         <SelectItem value='yearly'>Yearly</SelectItem>
+                        <SelectItem value='custom'>Custom (days)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className='space-y-2'>
-                    <Label>Amount (cUSDC)</Label>
-                    <Input
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      type='number'
-                      min='0'
-                      step='0.000001'
-                      placeholder='5.00'
-                    />
-                  </div>
+                  {interval === 'custom' ? (
+                    <div className='space-y-2'>
+                      <Label>Custom Days</Label>
+                      <Input
+                        value={customDays}
+                        onChange={(e) => setCustomDays(e.target.value.replace(/[^0-9]/g, ''))}
+                        type='text'
+                        inputMode='numeric'
+                        placeholder='30'
+                      />
+                    </div>
+                  ) : (
+                    <div className='space-y-2'>
+                      <Label>Amount (cUSDC)</Label>
+                      <Input
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        type='number'
+                        min='0'
+                        step='0.000001'
+                        placeholder='5.00'
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className='flex items-center justify-end gap-2'>
@@ -339,19 +361,33 @@ export default function MerchantPlansPage() {
                   >
                     <option value='monthly'>Monthly</option>
                     <option value='yearly'>Yearly</option>
+                    <option value='custom'>Custom (days)</option>
                   </select>
                 </div>
-                <div className='space-y-2'>
-                  <Label>Amount (cUSDC)</Label>
-                  <Input
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    type='number'
-                    min='0'
-                    step='0.000001'
-                    placeholder='5.00'
-                  />
-                </div>
+                {interval === 'custom' ? (
+                  <div className='space-y-2'>
+                    <Label>Custom Days</Label>
+                    <Input
+                      value={customDays}
+                      onChange={(e) => setCustomDays(e.target.value.replace(/[^0-9]/g, ''))}
+                      type='text'
+                      inputMode='numeric'
+                      placeholder='30'
+                    />
+                  </div>
+                ) : (
+                  <div className='space-y-2'>
+                    <Label>Amount (cUSDC)</Label>
+                    <Input
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      type='number'
+                      min='0'
+                      step='0.000001'
+                      placeholder='5.00'
+                    />
+                  </div>
+                )}
               </div>
 
               <div className='flex items-center justify-end gap-2'>
@@ -477,29 +513,43 @@ export default function MerchantPlansPage() {
               <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
             </div>
 
-            <div className='grid gap-4 sm:grid-cols-2'>
-              <div className='space-y-2'>
-                <Label>Cadence</Label>
-                <select
-                  value={editInterval}
-                  onChange={(e) => setEditInterval(e.target.value as PlanInterval)}
-                  className='h-10 w-full rounded-md border bg-background px-3 text-sm'
-                >
-                  <option value='monthly'>Monthly</option>
-                  <option value='yearly'>Yearly</option>
-                </select>
+<div className='grid gap-4 sm:grid-cols-2'>
+                <div className='space-y-2'>
+                  <Label>Cadence</Label>
+                  <select
+                    value={editInterval}
+                    onChange={(e) => setEditInterval(e.target.value as PlanInterval)}
+                    className='h-10 w-full rounded-md border bg-background px-3 text-sm'
+                  >
+                    <option value='monthly'>Monthly</option>
+                    <option value='yearly'>Yearly</option>
+                    <option value='custom'>Custom (days)</option>
+                  </select>
+                </div>
+                {editInterval === 'custom' ? (
+                  <div className='space-y-2'>
+                    <Label>Custom Days</Label>
+                    <Input
+                      value={editCustomDays}
+                      onChange={(e) => setEditCustomDays(e.target.value.replace(/[^0-9]/g, ''))}
+                      type='text'
+                      inputMode='numeric'
+                      placeholder='30'
+                    />
+                  </div>
+                ) : (
+                  <div className='space-y-2'>
+                    <Label>Amount (cUSDC)</Label>
+                    <Input
+                      value={editAmount}
+                      onChange={(e) => setEditAmount(e.target.value)}
+                      type='number'
+                      min='0'
+                      step='0.000001'
+                    />
+                  </div>
+                )}
               </div>
-              <div className='space-y-2'>
-                <Label>Amount (cUSDC)</Label>
-                <Input
-                  value={editAmount}
-                  onChange={(e) => setEditAmount(e.target.value)}
-                  type='number'
-                  min='0'
-                  step='0.000001'
-                />
-              </div>
-            </div>
 
             <div className='flex items-center justify-end gap-2'>
               <Button variant='outline' onClick={() => setEditing(null)}>

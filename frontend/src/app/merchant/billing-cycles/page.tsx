@@ -360,33 +360,29 @@ export default function MerchantBillingCyclesPage() {
       <div className='max-w-3xl h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
 
       <div className='max-w-3xl grid gap-3 md:grid-cols-4'>
-        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5'>
+        <div className='rounded-xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur p-5'>
           <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Open Cycles</p>
           <p className='mt-2 text-2xl font-semibold tabular-nums'>{metrics?.cyclesOpen || 0}</p>
         </div>
-        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5'>
+        <div className='rounded-xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur p-5'>
           <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Failed Today</p>
           <p className='mt-2 text-2xl font-semibold tabular-nums text-amber-600'>{metrics?.failedToday || 0}</p>
         </div>
-        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5'>
+        <div className='rounded-xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur p-5'>
           <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Paid Today</p>
           <p className='mt-2 text-2xl font-semibold tabular-nums text-emerald-600'>{metrics?.paidToday || 0}</p>
         </div>
-        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5'>
+        <div className='rounded-xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur p-5'>
           <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>MRR Proxy</p>
-          <p className='mt-2 text-2xl font-semibold tabular-nums'>
-            {formatMicrosToCurrency(metrics?.mrrProxyMicros || 0n)} cUSDC
-          </p>
+          <p className='mt-2 text-2xl font-semibold tabular-nums'>{formatMicrosToCurrency(metrics?.mrrProxyMicros || 0n)} cUSDC</p>
         </div>
       </div>
 
       <div className='max-w-3xl grid gap-6 xl:grid-cols-[1.1fr_1fr]'>
         <div className='space-y-4'>
-          <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-6'>
+          <div className='rounded-xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur p-6'>
             <h3 className='font-semibold'>Run Due Charges</h3>
-            <p className='mt-1 text-sm text-muted-foreground'>
-              Preview and manually collect charges where the next charge date has passed. This is UI-first; scheduler comes later.
-            </p>
+            <p className='mt-1 text-sm text-muted-foreground'>Collect charges where the next charge date has passed.</p>
 
             <div className='mt-4 rounded-lg border border-border/40 bg-background/50 p-4 text-sm'>
               <div className='flex items-center justify-between gap-3'>
@@ -430,11 +426,9 @@ export default function MerchantBillingCyclesPage() {
             </div>
           </div>
 
-          <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-6'>
-            <h3 className='font-semibold'>Run Manual Billing Attempt</h3>
-            <p className='mt-1 text-sm text-muted-foreground'>
-              Creates/updates subscription cycle records, then submits <code className='text-xs bg-muted/50 px-1 py-0.5 rounded'>pullSubscription</code> through account abstraction.
-            </p>
+          <div className='rounded-xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur p-6'>
+            <h3 className='font-semibold'>Run Manual Billing</h3>
+            <p className='mt-1 text-sm text-muted-foreground'>Manually charge a customer card.</p>
 
             <div className='mt-5 space-y-4'>
               <div className='space-y-2'>
@@ -558,7 +552,7 @@ export default function MerchantBillingCyclesPage() {
         </div>
       </div>
 
-      <div className='max-w-3xl rounded-xl border border-border/60 bg-card/50 backdrop-blur overflow-hidden'>
+      <div className='max-w-3xl rounded-xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur overflow-hidden'>
         <div className='p-4 border-b border-border/40'>
           <h3 className='font-semibold'>Billing Cycle Ledger</h3>
         </div>
@@ -609,22 +603,18 @@ export default function MerchantBillingCyclesPage() {
       </div>
 
       {selectedCycle && selectedCycleAttempts.length > 0 ? (
-        <div className='max-w-3xl rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
+        <div className='max-w-3xl rounded-xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur p-4'>
           <h3 className='font-semibold'>Attempt Timeline</h3>
           <div className='mt-3 space-y-2'>
             {selectedCycleAttempts.map((attempt) => (
               <div key={attempt.id} className='rounded-lg border border-border/40 bg-background/50 p-3 text-xs'>
                 <div className='flex items-center justify-between gap-3'>
-                  <p className='font-medium'>
-                    Attempt #{attempt.attemptNumber} &middot; {attempt.status}
-                  </p>
+                  <p className='font-medium'>Attempt #{attempt.attemptNumber} · {attempt.status}</p>
                   <p className='text-muted-foreground'>{new Date(attempt.startedAt).toLocaleString()}</p>
                 </div>
                 <p className='mt-1 text-muted-foreground tabular-nums'>Requested: {formatMicrosToCurrency(attempt.requestedAmountRef)} cUSDC</p>
                 {attempt.failureClass ? (
-                  <p className='mt-1 text-rose-600'>
-                    {attempt.failureClass.replaceAll('_', ' ')} {attempt.failureReason ? `\u00B7 ${attempt.failureReason}` : ''}
-                  </p>
+                  <p className='mt-1 text-rose-600'>{attempt.failureClass.replaceAll('_', ' ')} {attempt.failureReason ? ` · ${attempt.failureReason}` : ''}</p>
                 ) : null}
               </div>
             ))}
