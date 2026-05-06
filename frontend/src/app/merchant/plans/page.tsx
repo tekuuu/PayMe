@@ -47,7 +47,7 @@ export default function MerchantPlansPage() {
   const [description, setDescription] = useState('');
   const [interval, setInterval] = useState<PlanInterval>('monthly');
   const [customDays, setCustomDays] = useState('');
-  const [amount, setAmount] = useState('5.00');
+  const [amount, setAmount] = useState('');
 
   const [editing, setEditing] = useState<MerchantPlan | null>(null);
   const [editName, setEditName] = useState('');
@@ -302,7 +302,7 @@ const amountMicros = parseUnits(String(editAmount), 6).toString();
                         type='number'
                         min='0'
                         step='0.000001'
-                        placeholder='5.00'
+                        placeholder='Enter amount'
                       />
                     </div>
                   )}
