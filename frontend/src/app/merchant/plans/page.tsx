@@ -293,19 +293,19 @@ const amountMicros = parseUnits(String(editAmount), 6).toString();
                         placeholder='30'
                       />
                     </div>
-                  ) : (
-                    <div className='space-y-2'>
-                      <Label>Amount (cUSDC)</Label>
-                      <Input
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        type='number'
-                        min='0'
-                        step='0.000001'
-                        placeholder='Enter amount'
-                      />
-                    </div>
-                  )}
+                  ) : null}
+                </div>
+
+                <div className='space-y-2'>
+                  <Label>Amount (cUSDC)</Label>
+                  <Input
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    type='number'
+                    min='0'
+                    step='0.000001'
+                    placeholder='Enter amount'
+                  />
                 </div>
 
                 <div className='flex items-center justify-end gap-2'>
