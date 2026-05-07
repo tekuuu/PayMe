@@ -75,7 +75,7 @@ export function UserNav() {
                 onClick={copyAddress}
               >
                 {copied ? (
-                  <Check className='h-3 w-3 text-emerald-500' />
+                  <Check className='h-3 w-3 text-[color:var(--status-success)]' />
                 ) : (
                   <Copy className='h-3 w-3' />
                 )}

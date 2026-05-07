@@ -267,8 +267,8 @@ setSuccessTxHash(txHash);
   if (successTxHash) {
     return (
       <div className='flex flex-col items-center gap-3 py-6 text-center'>
-        <div className='flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10'>
-          <CheckCircle2 className='h-6 w-6 text-emerald-500' />
+        <div className='flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--status-success)]/10'>
+          <CheckCircle2 className='h-6 w-6 text-[color:var(--status-success)]' />
         </div>
         <p className='text-sm font-medium text-foreground'>Transaction Successful</p>
         <a

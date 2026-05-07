@@ -14,27 +14,35 @@ import { ReceiveTokenCard } from '@/components/smart-wallet/receive-token-card';
 import { ShieldCard } from '@/components/smart-wallet/shield-card';
 import type { Hex } from 'viem';
 
-function metricCard(title: string, value: string, tone?: 'default' | 'danger' | 'warning') {
-  const toneClass =
-    tone === 'danger'
-      ? 'text-rose-500'
-      : tone === 'warning'
-        ? 'text-amber-500'
-        : 'text-foreground';
+type TokenRow = {
+  id: string;
+  name: string;
+  symbol: string;
+  balance: string;
+  icon: string;
+  encrypted?: boolean;
+};
 
-  return (
-    <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5'>
-      <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>{title}</p>
-      <p className={`mt-2 text-2xl font-semibold ${toneClass}`}>{value}</p>
-    </div>
-  );
+function formatMicros(value?: bigint) {
+  if (value === undefined) return '-';
+  return (Number(value) / 1_000_000).toFixed(2);
+}
+
+function formatBalanceDisplay(val: string): string {
+  if (!val || val === '0.00') return '0.00';
+  const num = parseFloat(val);
+  if (Number.isNaN(num) || num === 0) return '0.00';
+  if (num < 0.000001) return '< 0.000001';
+  const fixed = num.toFixed(6);
+  if (num < 0.001) return fixed;
+  return parseFloat(fixed).toString();
 }
 
 
 
 export default function MerchantPage() {
   const { me } = useMe();
-  const { metrics, recoveryQueue } = useMerchantControlPlane(me?.account);
+  const { recoveryQueue } = useMerchantControlPlane(me?.account);
   const balances = useTokenBalances(me?.account);
   const {
     decryptedValue,
@@ -47,20 +55,56 @@ export default function MerchantPage() {
   } = useConfidentialTokenBalance(me?.account as Hex | undefined);
 
   const [activeAction, setActiveAction] = useState<string | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
-  const mrrText = metrics ? formatMicrosToCurrency(metrics.mrrProxyMicros) : '0';
   const plainUsdcRaw = (balances.usdc.balance as bigint | undefined) ?? 0n;
+  const tokens: TokenRow[] = [
+    {
+      id: 'eth',
+      name: 'Ethereum',
+      symbol: 'ETH',
+      balance: formatBalanceDisplay(balances.eth.formatted),
+      icon: '/assets/icons/tokens/eth-svgrepo-com.svg',
+    },
+    {
+      id: 'usdc',
+      name: 'USD Coin',
+      symbol: 'USDC',
+      balance: formatBalanceDisplay(balances.usdc.formatted),
+      icon: '/assets/icons/tokens/usdc.svg',
+    },
+    {
+      id: 'cusdc',
+      name: 'Confidential USDC',
+      symbol: 'cUSDC',
+      balance: decryptedValue !== undefined ? `${formatMicros(decryptedValue)}` : 'Encrypted',
+      icon: '/assets/icons/tokens/usdc.svg',
+      encrypted: true,
+    },
+  ];
+
+  const toggleRow = (id: string) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   return (
     <div className='flex-1 space-y-4 p-6'>
       {/* Header */}
-      <div className='space-y-1'>
+      <div className='mx-auto w-full max-w-3xl space-y-1'>
         <h2 className='text-2xl font-semibold tracking-tight text-foreground'>Merchant Overview</h2>
       </div>
-      <div className='h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
+      <div className='mx-auto w-full max-w-3xl h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
 
       {/* Treasury Overview */}
-      <div className='max-w-3xl rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+      <div className='mx-auto w-full max-w-3xl rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
         <div className='absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/[0.04] via-transparent to-primary/[0.02] opacity-0 group-hover:opacity-100 transition-opacity duration-500' />
         <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
         <div className='absolute top-0 bottom-0 left-0 w-px bg-gradient-to-b from-primary/15 via-transparent to-transparent rounded-l-2xl' />
@@ -111,7 +155,7 @@ export default function MerchantPage() {
       </div>
 
       {/* Wallet Actions */}
-      <div className='max-w-3xl rounded-xl border border-border/60 bg-card/50 backdrop-blur overflow-hidden'>
+      <div className='mx-auto w-full max-w-3xl rounded-xl border border-border/60 bg-card/50 backdrop-blur overflow-hidden'>
         <div className='px-6 py-4 border-b border-border/40'>
           <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Wallet Actions</p>
         </div>
@@ -167,24 +211,106 @@ export default function MerchantPage() {
         )}
       </div>
 
-      {/* Metrics */}
-      <div className='max-w-3xl grid gap-3 grid-cols-2'>
-        {metricCard('Active Subscriptions', String(metrics?.subscriptionsActive || 0))}
-        {metricCard(
-          'Past Due',
-          String(metrics?.subscriptionsPastDue || 0),
-          (metrics?.subscriptionsPastDue || 0) > 0 ? 'warning' : 'default'
-        )}
-        {metricCard(
-          'Recovery At Risk',
-          String(metrics?.recoveryAtRisk || 0),
-          (metrics?.recoveryAtRisk || 0) > 0 ? 'danger' : 'default'
-        )}
-        {metricCard('MRR Proxy', `${mrrText} cUSDC`)}
+      {/* Assets */}
+      <div className='mx-auto max-w-3xl space-y-2'>
+        {tokens.map((token) => {
+          const isExpanded = expandedRows.has(token.id);
+          const isEncryptedToken = token.id === 'cusdc';
+          return (
+            <div
+              key={token.id}
+              className='rounded-xl border border-border/60 bg-card/50 backdrop-blur overflow-hidden'
+            >
+              <div className='flex items-center justify-between p-4'>
+                <button
+                  onClick={() => toggleRow(token.id)}
+                  className='flex flex-1 items-center gap-3 text-left transition-colors hover:bg-muted/20 rounded-lg -ml-2 pl-2 pr-2 py-1'
+                >
+                  <div className='relative flex h-10 w-10 items-center justify-center rounded-full bg-muted/30'>
+                    <img
+                      src={token.icon}
+                      alt={token.symbol}
+                      className='h-6 w-6 rounded-full'
+                    />
+                  </div>
+                  <div>
+                    <p className='text-sm font-semibold'>{token.name}</p>
+                    <p className='text-xs text-muted-foreground'>{token.symbol}</p>
+                  </div>
+                  {token.encrypted && (
+                    <span className='ml-2 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary'>
+                      FHE
+                    </span>
+                  )}
+                </button>
+                <div className='flex items-center gap-3'>
+                  <span className='text-sm font-semibold tabular-nums text-foreground'>
+                    {token.balance}
+                  </span>
+                  {isEncryptedToken && (
+                    <button
+                      onClick={() => decryptWithAclSync()}
+                      disabled={!canDecrypt || isDecrypting || !handleHex}
+                      className='rounded-lg p-1.5 transition-colors hover:bg-muted/40 disabled:opacity-30 text-muted-foreground hover:text-foreground'
+                      title={isDecrypting ? 'Decrypting...' : 'Decrypt balance'}
+                    >
+                      {isDecrypting ? (
+                        <Loader2 size={16} />
+                      ) : (
+                        <Eye size={16} />
+                      )}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => toggleRow(token.id)}
+                    className='rounded-lg p-1 transition-colors hover:bg-muted/40'
+                  >
+                    {isExpanded ? (
+                      <span className='text-muted-foreground'>▴</span>
+                    ) : (
+                      <span className='text-muted-foreground'>▾</span>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {isExpanded && (
+                <div className='border-t border-border/40 bg-background/30 p-4'>
+                  <div className='grid gap-3 sm:grid-cols-3'>
+                    <div className='rounded-lg border border-border/40 bg-card/50 p-3'>
+                      <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>
+                        Type
+                      </p>
+                      <p className='mt-1 text-sm font-medium'>
+                        {token.encrypted ? 'Encrypted (FHE)' : 'Standard'}
+                      </p>
+                    </div>
+                    <div className='rounded-lg border border-border/40 bg-card/50 p-3'>
+                      <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>
+                        Balance
+                      </p>
+                      <p className='mt-1 text-sm font-medium tabular-nums'>
+                        {token.balance} {token.symbol}
+                      </p>
+                    </div>
+                    <div className='rounded-lg border border-border/40 bg-card/50 p-3'>
+                      <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>
+                        Status
+                      </p>
+                      <p className='mt-1 text-sm font-medium'>
+                        {token.encrypted && !handleHex ? 'Not funded' : 'Active'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Recovery + Quick links */}
-      <div className='max-w-3xl space-y-3'>
+      <div className='mx-auto w-full max-w-3xl space-y-3'>
         <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-6'>
           <div className='mb-4 flex items-center justify-between'>
             <div>

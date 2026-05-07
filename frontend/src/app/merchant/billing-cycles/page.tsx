@@ -350,75 +350,99 @@ export default function MerchantBillingCyclesPage() {
   };
 
   return (
-    <div className='flex-1 space-y-4 p-6'>
-      <div className='max-w-3xl space-y-1'>
+    <div className='flex-1 space-y-6 p-6'>
+      <div className='space-y-1'>
         <h2 className='text-2xl font-semibold tracking-tight text-foreground'>Billing Cycles</h2>
         <p className='text-sm text-muted-foreground'>
-          Run manual pulls, inspect attempts, and operate retry/uncollectible outcomes with a Stripe-like cycle ledger.
+          Track and manage billing operations, monitor payment attempts, and control retry strategies with complete visibility.
         </p>
       </div>
-      <div className='max-w-3xl h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
+      <div className='h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
 
-      <div className='max-w-3xl grid gap-3 md:grid-cols-4'>
-        <div className='rounded-xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur p-5'>
-          <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Open Cycles</p>
-          <p className='mt-2 text-2xl font-semibold tabular-nums'>{metrics?.cyclesOpen || 0}</p>
+      <div className='grid gap-4 md:grid-cols-4'>
+        <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+          <div className='absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/[0.04] via-transparent to-primary/[0.02] opacity-0 group-hover:opacity-100 transition-opacity duration-500' />
+          <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+          <div className='relative p-6 min-h-[140px] flex flex-col justify-between'>
+            <p className='text-[10px] uppercase tracking-wider font-medium text-muted-foreground'>Open Cycles</p>
+            <p className='text-3xl font-bold text-foreground tabular-nums'>{metrics?.cyclesOpen || 0}</p>
+          </div>
         </div>
-        <div className='rounded-xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur p-5'>
-          <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Failed Today</p>
-          <p className='mt-2 text-2xl font-semibold tabular-nums text-amber-600'>{metrics?.failedToday || 0}</p>
+        <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+          <div className='absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/[0.04] via-transparent to-primary/[0.02] opacity-0 group-hover:opacity-100 transition-opacity duration-500' />
+          <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+          <div className='relative p-6 min-h-[140px] flex flex-col justify-between'>
+            <p className='text-[10px] uppercase tracking-wider font-medium text-muted-foreground'>Failed Today</p>
+            <p className='text-3xl font-bold text-foreground tabular-nums'>{metrics?.failedToday || 0}</p>
+          </div>
         </div>
-        <div className='rounded-xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur p-5'>
-          <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Paid Today</p>
-          <p className='mt-2 text-2xl font-semibold tabular-nums text-emerald-600'>{metrics?.paidToday || 0}</p>
+        <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+          <div className='absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/[0.04] via-transparent to-primary/[0.02] opacity-0 group-hover:opacity-100 transition-opacity duration-500' />
+          <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+          <div className='relative p-6 min-h-[140px] flex flex-col justify-between'>
+            <p className='text-[10px] uppercase tracking-wider font-medium text-muted-foreground'>Paid Today</p>
+            <p className='text-3xl font-bold text-foreground tabular-nums'>{metrics?.paidToday || 0}</p>
+          </div>
         </div>
-        <div className='rounded-xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur p-5'>
-          <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>MRR Proxy</p>
-          <p className='mt-2 text-2xl font-semibold tabular-nums'>{formatMicrosToCurrency(metrics?.mrrProxyMicros || 0n)} cUSDC</p>
+        <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+          <div className='absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/[0.04] via-transparent to-primary/[0.02] opacity-0 group-hover:opacity-100 transition-opacity duration-500' />
+          <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+          <div className='relative p-6 min-h-[140px] flex flex-col justify-between'>
+            <p className='text-[10px] uppercase tracking-wider font-medium text-muted-foreground'>MRR Proxy</p>
+            <p className='text-2xl font-bold text-foreground tabular-nums'>{formatMicrosToCurrency(metrics?.mrrProxyMicros || 0n)}</p>
+            <p className='text-xs text-muted-foreground'>cUSDC</p>
+          </div>
         </div>
       </div>
 
-      <div className='max-w-3xl grid gap-6 xl:grid-cols-[1.1fr_1fr]'>
+      <div className='grid gap-6 xl:grid-cols-[1.1fr_1fr]'>
         <div className='space-y-4'>
-          <div className='rounded-xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur p-6'>
-            <h3 className='font-semibold'>Run Due Charges</h3>
-            <p className='mt-1 text-sm text-muted-foreground'>Collect charges where the next charge date has passed.</p>
-
-            <div className='mt-4 rounded-lg border border-border/40 bg-background/50 p-4 text-sm'>
-              <div className='flex items-center justify-between gap-3'>
-                <p className='font-medium'>Due agreements</p>
-                <p className='text-xs text-muted-foreground'>{dueAgreements.length}</p>
+          <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+            <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+            <div className='relative p-6 space-y-4'>
+              <div>
+                <h3 className='text-base font-semibold text-foreground'>Run Due Charges</h3>
+                <p className='mt-1 text-xs text-muted-foreground'>Collect charges where the next charge date has passed.</p>
               </div>
-              {dueAgreements.length === 0 ? (
-                <p className='mt-2 text-xs text-muted-foreground'>No due charges right now.</p>
-              ) : (
-                <div className='mt-3 space-y-2'>
-                  {dueAgreements.slice(0, 6).map((row) => (
-                    <div key={row.subscription.id} className='flex items-center justify-between gap-3 text-xs'>
-                      <p className='font-mono'>{row.subscription.customerCardAddress.slice(0, 10)}...</p>
-                      <p className='text-muted-foreground tabular-nums'>{formatMicrosToCurrency(row.amountRefMicros)} cUSDC</p>
-                      <p className='text-muted-foreground'>{new Date(row.nextChargeAt).toLocaleDateString()}</p>
-                    </div>
-                  ))}
-                  {dueAgreements.length > 6 ? (
-                    <p className='text-[11px] text-muted-foreground'>+ {dueAgreements.length - 6} more</p>
-                  ) : null}
+
+              <div className='rounded-xl border border-border/40 bg-background/50 p-4 space-y-3'>
+                <div className='flex items-center justify-between'>
+                  <p className='text-xs font-medium uppercase tracking-wide text-muted-foreground'>Due agreements</p>
+                  <span className='inline-flex items-center justify-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary'>
+                    {dueAgreements.length}
+                  </span>
                 </div>
-              )}
-            </div>
+                {dueAgreements.length === 0 ? (
+                  <p className='text-xs text-muted-foreground py-4 text-center'>No due charges right now.</p>
+                ) : (
+                  <div className='space-y-2 max-h-48 overflow-y-auto'>
+                    {dueAgreements.slice(0, 6).map((row) => (
+                      <div key={row.subscription.id} className='flex items-center justify-between gap-2 rounded-lg bg-muted/20 p-2.5 text-xs'>
+                        <p className='font-mono text-muted-foreground'>{row.subscription.customerCardAddress.slice(0, 10)}...</p>
+                        <div className='text-right'>
+                          <p className='font-semibold text-foreground tabular-nums'>{formatMicrosToCurrency(row.amountRefMicros)}</p>
+                          <p className='text-[10px] text-muted-foreground'>{new Date(row.nextChargeAt).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {dueAgreements.length > 6 ? (
+                      <p className='text-[11px] text-muted-foreground text-center pt-2'>+ {dueAgreements.length - 6} more</p>
+                    ) : null}
+                  </div>
+                )}
+              </div>
 
-            {dueProgress ? (
-              <p className='mt-3 flex items-center gap-2 text-xs text-muted-foreground'>
-                <Loader2 className='h-3.5 w-3.5 animate-spin' />
-                {dueProgress}
-              </p>
-            ) : null}
+              {dueProgress ? (
+                <div className='flex items-center gap-2 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground'>
+                  <Loader2 className='h-3.5 w-3.5 animate-spin flex-shrink-0' />
+                  <span>{dueProgress}</span>
+                </div>
+              ) : null}
 
-            <div className='mt-4 flex flex-wrap gap-2'>
               <Button
                 onClick={handleRunDueCharges}
                 disabled={dueLoading || !instance || !me?.account || dueAgreements.length === 0}
-                className='gap-2'
+                className='w-full gap-2'
               >
                 {dueLoading ? <Loader2 className='h-4 w-4 animate-spin' /> : <CreditCard className='h-4 w-4' />}
                 Run Due Charges
@@ -426,146 +450,168 @@ export default function MerchantBillingCyclesPage() {
             </div>
           </div>
 
-          <div className='rounded-xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur p-6'>
-            <h3 className='font-semibold'>Run Manual Billing</h3>
-            <p className='mt-1 text-sm text-muted-foreground'>Manually charge a customer card.</p>
-
-            <div className='mt-5 space-y-4'>
-              <div className='space-y-2'>
-                <label className='text-sm font-medium'>Load Existing Subscription (Optional)</label>
-                <Select value={selectedSubscriptionId} onValueChange={handlePickSubscription}>
-                  <SelectTrigger>
-                    <SelectValue placeholder='Manual entry' />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value='__manual__'>Manual entry</SelectItem>
-                    {availableSubscriptions.map((subscription) => (
-                      <SelectItem key={subscription.id} value={subscription.id}>
-                        {`${subscription.status.toUpperCase()} \u00B7 ${subscription.customerCardAddress.slice(0, 8)}...${subscription.customerCardAddress.slice(-4)}`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+            <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+            <div className='relative p-6 space-y-4'>
+              <div>
+                <h3 className='text-base font-semibold text-foreground'>Run Manual Billing</h3>
+                <p className='mt-1 text-xs text-muted-foreground'>Manually charge a customer card.</p>
               </div>
 
-              <div className='space-y-2'>
-                <label className='text-sm font-medium'>Customer Card Address</label>
-                <Input
-                  value={customerCard}
-                  onChange={(event) => setCustomerCard(event.target.value.trim())}
-                  placeholder='0x...'
-                />
-              </div>
-
-              <div className='grid gap-4 md:grid-cols-2'>
+              <div className='space-y-4'>
                 <div className='space-y-2'>
-                  <label className='text-sm font-medium'>Amount (cUSDC)</label>
+                  <label className='text-xs font-medium uppercase tracking-wide text-muted-foreground'>Load Existing Subscription (Optional)</label>
+                  <Select value={selectedSubscriptionId} onValueChange={handlePickSubscription}>
+                    <SelectTrigger className='rounded-xl'>
+                      <SelectValue placeholder='Manual entry' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value='__manual__'>Manual entry</SelectItem>
+                      {availableSubscriptions.map((subscription) => (
+                        <SelectItem key={subscription.id} value={subscription.id}>
+                          {`${subscription.status.toUpperCase()} \u00B7 ${subscription.customerCardAddress.slice(0, 8)}...${subscription.customerCardAddress.slice(-4)}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className='space-y-2'>
+                  <label className='text-xs font-medium uppercase tracking-wide text-muted-foreground'>Customer Card Address</label>
                   <Input
-                    value={amount}
-                    onChange={(event) => setAmount(event.target.value)}
-                    type='number'
-                    placeholder='5.00'
-                    min='0'
-                    step='0.000001'
+                    value={customerCard}
+                    onChange={(event) => setCustomerCard(event.target.value.trim())}
+                    placeholder='0x...'
+                    className='rounded-xl'
                   />
                 </div>
-                <div className='space-y-2'>
-                  <label className='text-sm font-medium'>Billing Period (days)</label>
-                  <Input
-                    value={periodDays}
-                    onChange={(event) => setPeriodDays(event.target.value)}
-                    type='number'
-                    min='1'
-                  />
-                </div>
-              </div>
 
-              <Button onClick={handleCharge} disabled={loading || !instance || !me?.account} className='gap-2'>
-                {loading ? <Loader2 className='h-4 w-4 animate-spin' /> : <CreditCard className='h-4 w-4' />}
-                Submit Billing Attempt
-              </Button>
+                <div className='grid gap-3 md:grid-cols-2'>
+                  <div className='space-y-2'>
+                    <label className='text-xs font-medium uppercase tracking-wide text-muted-foreground'>Amount (cUSDC)</label>
+                    <Input
+                      value={amount}
+                      onChange={(event) => setAmount(event.target.value)}
+                      type='number'
+                      placeholder='5.00'
+                      min='0'
+                      step='0.000001'
+                      className='rounded-xl'
+                    />
+                  </div>
+                  <div className='space-y-2'>
+                    <label className='text-xs font-medium uppercase tracking-wide text-muted-foreground'>Billing Period (days)</label>
+                    <Input
+                      value={periodDays}
+                      onChange={(event) => setPeriodDays(event.target.value)}
+                      type='number'
+                      min='1'
+                      className='rounded-xl'
+                    />
+                  </div>
+                </div>
+
+                <Button onClick={handleCharge} disabled={loading || !instance || !me?.account} className='w-full gap-2'>
+                  {loading ? <Loader2 className='h-4 w-4 animate-spin' /> : <CreditCard className='h-4 w-4' />}
+                  Submit Billing Attempt
+                </Button>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-6'>
-          <h3 className='font-semibold'>Cycle Details</h3>
-          <p className='mt-1 text-sm text-muted-foreground'>
-            Select a cycle to inspect attempts and operator controls.
-          </p>
+        <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+          <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+          <div className='relative p-6 space-y-4'>
+            <div>
+              <h3 className='text-base font-semibold text-foreground'>Cycle Details</h3>
+              <p className='mt-1 text-xs text-muted-foreground'>
+                Select a cycle to inspect attempts and operator controls.
+              </p>
+            </div>
 
-          <div className='mt-4 space-y-3'>
-            <Select value={selectedCycle?.id || ''} onValueChange={(value) => setSelectedCycleId(value || null)}>
-              <SelectTrigger>
-                <SelectValue placeholder={sortedCycles.length === 0 ? 'No cycles yet' : undefined} />
-              </SelectTrigger>
-              <SelectContent>
-                {sortedCycles.map((cycle) => (
-                  <SelectItem key={cycle.id} value={cycle.id}>
-                    {`${cycle.status.toUpperCase()} \u00B7 ${cycle.id.slice(-6)} \u00B7 ${new Date(cycle.createdAt).toLocaleDateString()}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className='space-y-3'>
+              <Select value={selectedCycle?.id || ''} onValueChange={(value) => setSelectedCycleId(value || null)}>
+                <SelectTrigger className='rounded-xl'>
+                  <SelectValue placeholder={sortedCycles.length === 0 ? 'No cycles yet' : undefined} />
+                </SelectTrigger>
+                <SelectContent>
+                  {sortedCycles.map((cycle) => (
+                    <SelectItem key={cycle.id} value={cycle.id}>
+                      {`${cycle.status.toUpperCase()} \u00B7 ${cycle.id.slice(-6)} \u00B7 ${new Date(cycle.createdAt).toLocaleDateString()}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-            {selectedCycle ? (
-              <div className='rounded-lg border border-border/40 bg-background/50 p-4 text-sm'>
-                <div className='flex items-center justify-between gap-3'>
-                  <BillingStatusBadge status={selectedCycle.status} />
-                  {selectedCycleSubscription ? <SubscriptionStatusBadge status={selectedCycleSubscription.status} /> : null}
+              {selectedCycle ? (
+                <div className='rounded-xl border border-border/40 bg-background/50 p-4 space-y-3'>
+                  <div className='flex items-center justify-between gap-2 flex-wrap'>
+                    <BillingStatusBadge status={selectedCycle.status} />
+                    {selectedCycleSubscription ? <SubscriptionStatusBadge status={selectedCycleSubscription.status} /> : null}
+                  </div>
+                  <div className='space-y-2 text-xs text-muted-foreground'>
+                    <div className='flex justify-between'>
+                      <span>Attempts:</span>
+                      <span className='font-semibold text-foreground'>{selectedCycle.attemptCount}</span>
+                    </div>
+                    <div className='flex justify-between'>
+                      <span>Next retry:</span>
+                      <span className='font-semibold text-foreground'>
+                        {selectedCycle.nextAttemptAt ? new Date(selectedCycle.nextAttemptAt).toLocaleString() : 'Not scheduled'}
+                      </span>
+                    </div>
+                    <div className='flex justify-between'>
+                      <span>Period end:</span>
+                      <span className='font-semibold text-foreground'>{new Date(selectedCycle.cycleEnd).toLocaleString()}</span>
+                    </div>
+                  </div>
+                  <div className='flex gap-2 pt-2'>
+                    <Button
+                      size='sm'
+                      variant='outline'
+                      className='flex-1 gap-1'
+                      onClick={() => requestCycleRetry(selectedCycle.id)}
+                    >
+                      <RefreshCcw className='h-3.5 w-3.5' />
+                      Retry
+                    </Button>
+                    <Button
+                      size='sm'
+                      variant='destructive'
+                      className='flex-1 gap-1'
+                      onClick={() => setCycleUncollectible(selectedCycle.id)}
+                    >
+                      <ShieldAlert className='h-3.5 w-3.5' />
+                      Uncollectible
+                    </Button>
+                  </div>
                 </div>
-                <div className='mt-3 space-y-1 text-xs text-muted-foreground'>
-                  <p>Attempts: {selectedCycle.attemptCount}</p>
-                  <p>
-                    Next retry:{' '}
-                    {selectedCycle.nextAttemptAt ? new Date(selectedCycle.nextAttemptAt).toLocaleString() : 'Not scheduled'}
-                  </p>
-                  <p>Period end: {new Date(selectedCycle.cycleEnd).toLocaleString()}</p>
+              ) : (
+                <div className='rounded-xl border border-dashed border-border/40 bg-background/30 p-6 text-center text-xs text-muted-foreground'>
+                  Run your first billing attempt to create a cycle.
                 </div>
-                <div className='mt-4 flex flex-wrap gap-2'>
-                  <Button
-                    size='sm'
-                    variant='outline'
-                    className='gap-1'
-                    onClick={() => requestCycleRetry(selectedCycle.id)}
-                  >
-                    <RefreshCcw className='h-3.5 w-3.5' />
-                    Retry Now
-                  </Button>
-                  <Button
-                    size='sm'
-                    variant='destructive'
-                    className='gap-1'
-                    onClick={() => setCycleUncollectible(selectedCycle.id)}
-                  >
-                    <ShieldAlert className='h-3.5 w-3.5' />
-                    Mark Uncollectible
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className='rounded-lg border border-dashed border-border/40 p-6 text-center text-sm text-muted-foreground'>
-                Run your first billing attempt to create a cycle.
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className='max-w-3xl rounded-xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur overflow-hidden'>
-        <div className='p-4 border-b border-border/40'>
-          <h3 className='font-semibold'>Billing Cycle Ledger</h3>
+      <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur overflow-hidden'>
+        <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+        <div className='p-6 border-b border-border/40'>
+          <h3 className='text-base font-semibold text-foreground'>Billing Cycle Ledger</h3>
         </div>
         <div className='overflow-x-auto'>
           <table className='w-full text-sm'>
             <thead className='border-b border-border/40 bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground'>
               <tr>
-                <th className='px-4 py-3 font-medium'>Cycle</th>
-                <th className='px-4 py-3 font-medium'>Subscription</th>
-                <th className='px-4 py-3 font-medium'>Status</th>
-                <th className='px-4 py-3 font-medium'>Attempts</th>
-                <th className='px-4 py-3 font-medium'>Failure Class</th>
-                <th className='px-4 py-3 font-medium'>Next Retry</th>
+                <th className='px-4 py-3 font-semibold'>Cycle</th>
+                <th className='px-4 py-3 font-semibold'>Subscription</th>
+                <th className='px-4 py-3 font-semibold'>Status</th>
+                <th className='px-4 py-3 font-semibold'>Attempts</th>
+                <th className='px-4 py-3 font-semibold'>Failure Class</th>
+                <th className='px-4 py-3 font-semibold'>Next Retry</th>
               </tr>
             </thead>
             <tbody className='divide-y divide-border/30'>
@@ -579,20 +625,20 @@ export default function MerchantBillingCyclesPage() {
                 sortedCycles.map((cycle) => (
                   <tr
                     key={cycle.id}
-                    className='cursor-pointer hover:bg-muted/40'
+                    className='cursor-pointer hover:bg-muted/40 transition-colors'
                     onClick={() => setSelectedCycleId(cycle.id)}
                   >
-                    <td className='px-4 py-3 font-mono text-xs'>{cycle.id}</td>
-                    <td className='px-4 py-3 font-mono text-xs'>{cycle.subscriptionId.slice(-10)}</td>
+                    <td className='px-4 py-3 font-mono text-xs text-muted-foreground'>{cycle.id.slice(-12)}</td>
+                    <td className='px-4 py-3 font-mono text-xs text-muted-foreground'>{cycle.subscriptionId.slice(-10)}</td>
                     <td className='px-4 py-3'>
                       <BillingStatusBadge status={cycle.status} />
                     </td>
-                    <td className='px-4 py-3'>{cycle.attemptCount}</td>
+                    <td className='px-4 py-3 text-sm font-semibold'>{cycle.attemptCount}</td>
                     <td className='px-4 py-3'>
-                      {cycle.lastFailureClass ? <FailureClassBadge failureClass={cycle.lastFailureClass} /> : '-'}
+                      {cycle.lastFailureClass ? <FailureClassBadge failureClass={cycle.lastFailureClass} /> : <span className='text-muted-foreground text-xs'>—</span>}
                     </td>
-                    <td className='px-4 py-3 text-xs'>
-                      {cycle.nextAttemptAt ? new Date(cycle.nextAttemptAt).toLocaleString() : '-'}
+                    <td className='px-4 py-3 text-xs text-muted-foreground'>
+                      {cycle.nextAttemptAt ? new Date(cycle.nextAttemptAt).toLocaleString() : '—'}
                     </td>
                   </tr>
                 ))
@@ -603,21 +649,24 @@ export default function MerchantBillingCyclesPage() {
       </div>
 
       {selectedCycle && selectedCycleAttempts.length > 0 ? (
-        <div className='max-w-3xl rounded-xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur p-4'>
-          <h3 className='font-semibold'>Attempt Timeline</h3>
-          <div className='mt-3 space-y-2'>
-            {selectedCycleAttempts.map((attempt) => (
-              <div key={attempt.id} className='rounded-lg border border-border/40 bg-background/50 p-3 text-xs'>
-                <div className='flex items-center justify-between gap-3'>
-                  <p className='font-medium'>Attempt #{attempt.attemptNumber} · {attempt.status}</p>
-                  <p className='text-muted-foreground'>{new Date(attempt.startedAt).toLocaleString()}</p>
+        <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden'>
+          <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+          <div className='relative p-6 space-y-4'>
+            <h3 className='text-base font-semibold text-foreground'>Attempt Timeline</h3>
+            <div className='space-y-2'>
+              {selectedCycleAttempts.map((attempt) => (
+                <div key={attempt.id} className='rounded-xl border border-border/40 bg-background/50 p-4 text-xs space-y-2'>
+                  <div className='flex items-center justify-between gap-3'>
+                    <p className='font-medium text-foreground'>Attempt #{attempt.attemptNumber} • {attempt.status}</p>
+                    <p className='text-muted-foreground text-[11px]'>{new Date(attempt.startedAt).toLocaleString()}</p>
+                  </div>
+                  <p className='text-muted-foreground tabular-nums'>Requested: <span className='text-foreground font-semibold'>{formatMicrosToCurrency(attempt.requestedAmountRef)} cUSDC</span></p>
+                  {attempt.failureClass ? (
+                    <p className='text-rose-600 text-xs'>{attempt.failureClass.replaceAll('_', ' ')} {attempt.failureReason ? ` · ${attempt.failureReason}` : ''}</p>
+                  ) : null}
                 </div>
-                <p className='mt-1 text-muted-foreground tabular-nums'>Requested: {formatMicrosToCurrency(attempt.requestedAmountRef)} cUSDC</p>
-                {attempt.failureClass ? (
-                  <p className='mt-1 text-rose-600'>{attempt.failureClass.replaceAll('_', ' ')} {attempt.failureReason ? ` · ${attempt.failureReason}` : ''}</p>
-                ) : null}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       ) : null}

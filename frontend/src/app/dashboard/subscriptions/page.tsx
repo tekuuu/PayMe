@@ -103,86 +103,101 @@ function SubscriptionCard({
   };
 
   return (
-    <div className={`rounded-xl border border-border/60 bg-card/50 backdrop-blur overflow-hidden transition-all hover:border-border/80 ${isCanceled ? 'opacity-70' : ''}`}>
-      <div className='px-5 py-4'>
-        <div className='flex items-center justify-between gap-4'>
-          <div className='flex items-center gap-3'>
-            <SubscriptionStatusBadge status={row.status as SubscriptionStatus} />
-            {row.cancelAtPeriodEnd && (
-              <span className='inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-600'>
-                <AlertCircle className='h-3 w-3' />
-                Cancels at period end
-              </span>
-            )}
-            <div>
-              <h3 className='text-base font-semibold text-foreground'>{row.planName}</h3>
-              <p className='text-xs text-muted-foreground capitalize'>{row.planInterval} · {days} days</p>
+    <div className={`rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur overflow-hidden transition-all relative overflow-hidden group ${isCanceled ? 'opacity-70' : ''}`}>
+      <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+      {/* Header */}
+      <div className='relative px-6 py-4 space-y-4'>
+        <div className='flex items-start justify-between gap-4'>
+          <div className='space-y-2'>
+            <div className='flex items-center gap-2'>
+              <SubscriptionStatusBadge status={row.status as SubscriptionStatus} />
+              {row.cancelAtPeriodEnd && (
+                <span className='inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-600'>
+                  <AlertCircle className='h-3 w-3' />
+                  Cancels end-period
+                </span>
+              )}
             </div>
+            <h3 className='text-base font-semibold text-foreground'>{row.planName}</h3>
+            <p className='text-xs text-muted-foreground capitalize'>{row.planInterval} · {days} days</p>
           </div>
 
           <div className='text-right'>
             <p className='text-2xl font-bold text-foreground tabular-nums'>
               ${formatMicrosToCurrency(row.maxAllowanceRefMicros)}
             </p>
-            <p className='text-xs text-muted-foreground'>max per period</p>
+            <p className='text-xs text-muted-foreground'>per cycle</p>
           </div>
         </div>
-      </div>
 
-      <div className='flex items-center gap-2 px-5 py-3 border-t border-border/30 bg-muted/10'>
-        <div className='flex items-center gap-1.5 text-xs text-muted-foreground'>
-          <Wallet className='h-3.5 w-3.5' />
-          <span className='font-mono'>{shortAddress(row.merchantAddress)}</span>
-          <button onClick={() => copyText(row.merchantAddress, 'Merchant')} className='p-0.5 text-muted-foreground/60 hover:text-foreground'>
-            <Copy size={12} />
-          </button>
+        {/* Info row */}
+        <div className='flex flex-col gap-2 rounded-xl border border-border/40 bg-background/50 p-3'>
+          <div className='flex items-center gap-2 text-xs text-muted-foreground'>
+            <Wallet className='h-3.5 w-3.5 flex-shrink-0' />
+            <span className='font-mono'>{shortAddress(row.merchantAddress)}</span>
+            <button
+              onClick={() => copyText(row.merchantAddress, 'Merchant')}
+              className='p-0.5 text-muted-foreground/60 hover:text-foreground transition-colors'
+            >
+              <Copy size={12} />
+            </button>
+          </div>
+          <div className='flex items-center gap-2 text-xs text-muted-foreground pt-1'>
+            <Calendar className='h-3.5 w-3.5 flex-shrink-0' />
+            <span>Next: {new Date(row.nextChargeAt).toLocaleDateString()}</span>
+          </div>
         </div>
-        <span className='text-muted-foreground/30'>·</span>
-        <div className='flex items-center gap-1.5 text-xs text-muted-foreground ml-auto'>
-          <Calendar className='h-3.5 w-3.5' />
-          <span>Next: {new Date(row.nextChargeAt).toLocaleDateString()}</span>
-        </div>
-        <button onClick={() => setExpanded(!expanded)} className='ml-2 rounded-md p-1 text-muted-foreground hover:bg-muted/40'>
-          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className='w-full flex items-center justify-center rounded-lg p-2 text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/40'
+        >
+          {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         </button>
       </div>
 
+      {/* Expanded details */}
       {expanded && (
-        <div className='border-t border-border/40 bg-background/50 px-5 py-4 space-y-4'>
-          <div className='grid grid-cols-3 gap-px rounded-lg border border-border/30 bg-border/30 overflow-hidden'>
-            <div className='bg-card/60 p-3'>
-              <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>Plan</p>
-              <p className='mt-1 text-sm font-medium capitalize'>{row.planInterval}</p>
+        <div className='border-t border-border/40 bg-background/50 p-6 space-y-4'>
+          {/* Period info */}
+          <div className='grid grid-cols-3 gap-3'>
+            <div className='rounded-xl border border-border/40 bg-card/50 p-3'>
+              <p className='text-[10px] uppercase tracking-wider font-medium text-muted-foreground'>Plan</p>
+              <p className='mt-2 text-sm font-semibold text-foreground capitalize'>{row.planInterval}</p>
             </div>
-            <div className='bg-card/60 p-3'>
-              <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>Cycle</p>
-              <p className='mt-1 text-sm font-medium tabular-nums'>{days} days</p>
+            <div className='rounded-xl border border-border/40 bg-card/50 p-3'>
+              <p className='text-[10px] uppercase tracking-wider font-medium text-muted-foreground'>Cycle</p>
+              <p className='mt-2 text-sm font-semibold text-foreground tabular-nums'>{days} days</p>
             </div>
-            <div className='bg-card/60 p-3'>
-              <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>Max</p>
-              <p className='mt-1 text-sm font-medium tabular-nums'>${formatMicrosToCurrency(row.maxAllowanceRefMicros)}</p>
+            <div className='rounded-xl border border-border/40 bg-card/50 p-3'>
+              <p className='text-[10px] uppercase tracking-wider font-medium text-muted-foreground'>Max</p>
+              <p className='mt-2 text-sm font-semibold text-foreground tabular-nums'>${formatMicrosToCurrency(row.maxAllowanceRefMicros)}</p>
             </div>
           </div>
 
+          {/* On-chain ref */}
           {row.subscriptionRef && (
-            <div className='flex items-center gap-2 p-3 rounded-lg bg-muted/30 border border-border/30'>
-              <CreditCard className='h-4 w-4 text-muted-foreground shrink-0' />
+            <div className='flex items-center gap-3 p-3 rounded-xl bg-muted/30 border border-border/40'>
+              <CreditCard className='h-4 w-4 text-muted-foreground flex-shrink-0' />
               <div>
-                <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>On-Chain Ref</p>
-                <p className='text-xs font-mono mt-0.5'>{row.subscriptionRef}</p>
+                <p className='text-[10px] uppercase tracking-wider font-medium text-muted-foreground'>On-Chain Ref</p>
+                <p className='text-xs font-mono mt-1 text-foreground'>{row.subscriptionRef}</p>
               </div>
-              <button onClick={() => copyText(row.subscriptionRef!, 'Ref')} className='ml-auto p-1 text-muted-foreground/60 hover:text-foreground'>
+              <button onClick={() => copyText(row.subscriptionRef!, 'Ref')} className='ml-auto p-1 text-muted-foreground/60 hover:text-foreground transition-colors'>
                 <Copy size={12} />
               </button>
             </div>
           )}
 
-          <div className='flex flex-wrap gap-2 pt-2 border-t border-border/30'>
-            <Button size='sm' variant='outline' onClick={onUpdateAllowance}>Update Allowance</Button>
-            <Button size='sm' variant='secondary' onClick={() => setShowConfirmDialog('cancel-period')} disabled={isSubmitting}>
-              {row.cancelAtPeriodEnd ? 'Undo Cancel' : 'Cancel End-Period'}
+          {/* Actions */}
+          <div className='flex flex-wrap items-center gap-2 pt-4 border-t border-border/40'>
+            <Button size='sm' variant='outline' onClick={onUpdateAllowance} className='flex-1'>
+              Update Allowance
             </Button>
-            <Button size='sm' variant='destructive' onClick={() => setShowConfirmDialog('cancel-now')} disabled={isSubmitting}>
+            <Button size='sm' variant='secondary' onClick={() => setShowConfirmDialog('cancel-period')} disabled={isSubmitting} className='flex-1'>
+              {row.cancelAtPeriodEnd ? 'Undo Cancel' : 'Cancel at End'}
+            </Button>
+            <Button size='sm' variant='destructive' onClick={() => setShowConfirmDialog('cancel-now')} disabled={isSubmitting} className='flex-1'>
               <XCircle className='h-3.5 w-3.5 mr-1' />Cancel Now
             </Button>
           </div>
@@ -552,38 +567,56 @@ export default function SubscriptionsPage() {
   }
 
   return (
-    <div className='flex-1 space-y-4 p-6'>
+    <div className='flex-1 space-y-6 p-6'>
       <div className='space-y-1'>
         <h2 className='text-2xl font-semibold tracking-tight text-foreground'>Subscriptions</h2>
+        <p className='text-sm text-muted-foreground'>
+          View and manage your active subscriptions and billing cycles.
+        </p>
       </div>
       <div className='h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
 
-      <div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3'>
-        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
-          <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>Total</p>
-          <p className='mt-1 text-2xl font-bold tabular-nums'>{stats.total}</p>
+      <div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4'>
+        <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+          <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+          <div className='relative p-6 min-h-[140px] flex flex-col justify-between'>
+            <p className='text-[10px] uppercase tracking-wider font-medium text-muted-foreground'>Total</p>
+            <p className='text-3xl font-bold text-foreground tabular-nums'>{stats.total}</p>
+          </div>
         </div>
-        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
-          <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>Active</p>
-          <p className='mt-1 text-2xl font-bold tabular-nums text-emerald-600'>{stats.active}</p>
+        <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+          <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+          <div className='relative p-6 min-h-[140px] flex flex-col justify-between'>
+            <p className='text-[10px] uppercase tracking-wider font-medium text-muted-foreground'>Active</p>
+            <p className='text-3xl font-bold text-foreground tabular-nums'>{stats.active}</p>
+          </div>
         </div>
-        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
-          <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>Past Due</p>
-          <p className='mt-1 text-2xl font-bold tabular-nums text-amber-600'>{stats.pastDue}</p>
+        <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+          <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+          <div className='relative p-6 min-h-[140px] flex flex-col justify-between'>
+            <p className='text-[10px] uppercase tracking-wider font-medium text-muted-foreground'>Past Due</p>
+            <p className='text-3xl font-bold text-foreground tabular-nums'>{stats.pastDue}</p>
+          </div>
         </div>
-        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
-          <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>Paused</p>
-          <p className='mt-1 text-2xl font-bold tabular-nums text-violet-600'>{stats.paused}</p>
+        <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+          <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+          <div className='relative p-6 min-h-[140px] flex flex-col justify-between'>
+            <p className='text-[10px] uppercase tracking-wider font-medium text-muted-foreground'>Paused</p>
+            <p className='text-3xl font-bold text-foreground tabular-nums'>{stats.paused}</p>
+          </div>
         </div>
-        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-4'>
-          <p className='text-[10px] uppercase tracking-wider text-muted-foreground'>Canceled</p>
-          <p className='mt-1 text-2xl font-bold tabular-nums text-zinc-500'>{stats.canceled}</p>
+        <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+          <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+          <div className='relative p-6 min-h-[140px] flex flex-col justify-between'>
+            <p className='text-[10px] uppercase tracking-wider font-medium text-muted-foreground'>Canceled</p>
+            <p className='text-3xl font-bold text-foreground tabular-nums'>{stats.canceled}</p>
+          </div>
         </div>
       </div>
 
-      <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-3'>
+      <div className='grid gap-4 md:grid-cols-2'>
         {rows.length === 0 ? (
-          <div className='col-span-full rounded-xl border border-border/60 bg-card/50 backdrop-blur p-8 text-center text-muted-foreground'>
+          <div className='col-span-full rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur p-8 text-center text-muted-foreground'>
             No subscriptions yet. Approve from a merchant checkout link.
           </div>
         ) : (

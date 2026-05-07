@@ -87,7 +87,7 @@ export function ReceiveTokenCard({ address }: ReceiveTokenCardProps) {
             onClick={copyToClipboard}
           >
             {copied ? (
-              <Check className='h-4 w-4 text-emerald-500' />
+              <Check className='h-4 w-4 text-[color:var(--status-success)]' />
             ) : (
               <Copy className='h-4 w-4' />
             )}

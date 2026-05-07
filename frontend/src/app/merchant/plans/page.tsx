@@ -81,10 +81,10 @@ export default function MerchantPlansPage() {
       return;
     }
 
-try {
-        setSubmittingAction('create');
-        const amountMicros = parseUnits(String(amount), 6).toString();
-        const billingIntervalSeconds = intervalToSeconds(interval, Number(customDays) || undefined);
+    try {
+      setSubmittingAction('create');
+      const amountMicros = parseUnits(String(amount), 6).toString();
+      const billingIntervalSeconds = intervalToSeconds(interval, Number(customDays) || undefined);
       const planRef = createPlanRef({
         merchantAddress: me.account,
         name,
@@ -163,8 +163,8 @@ try {
       setSubmittingAction('edit');
       setActivePlanId(editing.id);
 
-const amountMicros = parseUnits(String(editAmount), 6).toString();
-        const billingIntervalSeconds = intervalToSeconds(editInterval, Number(editCustomDays) || undefined);
+      const amountMicros = parseUnits(String(editAmount), 6).toString();
+      const billingIntervalSeconds = intervalToSeconds(editInterval, Number(editCustomDays) || undefined);
       const termsHash = createPlanTermsHash({
         name: editName,
         description: editDescription,
@@ -230,17 +230,18 @@ const amountMicros = parseUnits(String(editAmount), 6).toString();
   };
 
   return (
-    <div className='flex-1 space-y-6 p-8 pt-6'>
-<div className='flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between'>
-        <div className='space-y-2'>
-          <h2 className='text-3xl font-bold tracking-tight'>Plans</h2>
-          <p className='text-sm text-muted-foreground'>
-            Create monthly or yearly plans on-chain and share a checkout link. Local storage still keeps display metadata until DB indexing lands.
-          </p>
-        </div>
+    <div className='flex-1 space-y-6 p-6'>
+      <div className='space-y-1'>
+        <h2 className='text-2xl font-semibold tracking-tight text-foreground'>Plans</h2>
+        <p className='text-sm text-muted-foreground'>
+          Create and manage subscription plans that are stored on-chain with local metadata.
+        </p>
+      </div>
+      <div className='h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
 
+      <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
         <div className='flex gap-2'>
-          <Button variant='outline' size='sm' className='gap-2' onClick={() => refresh()}>
+          <Button variant='outline' className='gap-2' onClick={() => refresh()}>
             <RefreshCw className='h-4 w-4' />
             Refresh
           </Button>
@@ -259,20 +260,20 @@ const amountMicros = parseUnits(String(editAmount), 6).toString();
 
               <div className='space-y-4'>
                 <div className='space-y-2'>
-                  <Label>Plan Name</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder='Starter' />
+                  <Label className='text-xs font-medium uppercase tracking-wide'>Plan Name</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder='Starter' className='rounded-xl' />
                 </div>
 
                 <div className='space-y-2'>
-                  <Label>Description</Label>
-                  <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder='What does this plan include?' />
+                  <Label className='text-xs font-medium uppercase tracking-wide'>Description</Label>
+                  <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder='What does this plan include?' className='rounded-xl' />
                 </div>
 
                 <div className='grid gap-4 sm:grid-cols-2'>
                   <div className='space-y-2'>
-                    <Label>Cadence</Label>
+                    <Label className='text-xs font-medium uppercase tracking-wide'>Cadence</Label>
                     <Select value={interval} onValueChange={(value) => setInterval(value as PlanInterval)}>
-                      <SelectTrigger>
+                      <SelectTrigger className='rounded-xl'>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -284,20 +285,21 @@ const amountMicros = parseUnits(String(editAmount), 6).toString();
                   </div>
                   {interval === 'custom' ? (
                     <div className='space-y-2'>
-                      <Label>Custom Days</Label>
+                      <Label className='text-xs font-medium uppercase tracking-wide'>Custom Days</Label>
                       <Input
                         value={customDays}
                         onChange={(e) => setCustomDays(e.target.value.replace(/[^0-9]/g, ''))}
                         type='text'
                         inputMode='numeric'
                         placeholder='30'
+                        className='rounded-xl'
                       />
                     </div>
                   ) : null}
                 </div>
 
                 <div className='space-y-2'>
-                  <Label>Amount (cUSDC)</Label>
+                  <Label className='text-xs font-medium uppercase tracking-wide'>Amount (cUSDC)</Label>
                   <Input
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
@@ -305,10 +307,11 @@ const amountMicros = parseUnits(String(editAmount), 6).toString();
                     min='0'
                     step='0.000001'
                     placeholder='Enter amount'
+                    className='rounded-xl'
                   />
                 </div>
 
-                <div className='flex items-center justify-end gap-2'>
+                <div className='flex items-center justify-end gap-2 pt-2'>
                   <Button variant='outline' onClick={() => setCreateOpen(false)}>
                     Cancel
                   </Button>
@@ -320,23 +323,24 @@ const amountMicros = parseUnits(String(editAmount), 6).toString();
             </DialogContent>
           </Dialog>
         </div>
-</div>
+      </div>
 
-      <div className='rounded-xl border bg-card shadow-sm'>
+      <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur overflow-hidden'>
+        <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
         <div className='overflow-x-auto'>
           <table className='w-full text-sm'>
-            <thead className='border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground'>
+            <thead className='border-b border-border/40 bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground'>
               <tr>
-                <th className='px-4 py-3 font-medium'>Plan</th>
-                <th className='px-4 py-3 font-medium'>Cadence</th>
-                <th className='px-4 py-3 font-medium'>Amount</th>
-                <th className='px-4 py-3 font-medium'>Opaque Ref</th>
-                <th className='px-4 py-3 font-medium'>Status</th>
-                <th className='px-4 py-3 font-medium'>Checkout</th>
-                <th className='px-4 py-3 font-medium'>Actions</th>
+                <th className='px-4 py-4 font-semibold'>Plan</th>
+                <th className='px-4 py-4 font-semibold'>Cadence</th>
+                <th className='px-4 py-4 font-semibold'>Amount</th>
+                <th className='px-4 py-4 font-semibold'>Plan Reference</th>
+                <th className='px-4 py-4 font-semibold'>Status</th>
+                <th className='px-4 py-4 font-semibold'>Checkout Link</th>
+                <th className='px-4 py-4 font-semibold'>Actions</th>
               </tr>
             </thead>
-            <tbody className='divide-y'>
+            <tbody className='divide-y divide-border/30'>
               {!isHydrated ? (
                 <tr>
                   <td className='px-4 py-8 text-center text-muted-foreground' colSpan={7}>
@@ -353,50 +357,50 @@ const amountMicros = parseUnits(String(editAmount), 6).toString();
                 plans.map((plan) => {
                   const checkoutUrl = `${toAbsoluteAppOrigin()}/subscribe/${plan.checkoutSlug}`;
                   return (
-                    <tr key={plan.id} className='align-top'>
-                      <td className='px-4 py-3'>
-                        <div className='font-medium'>{plan.name}</div>
+                    <tr key={plan.id} className='align-top hover:bg-muted/40 transition-colors'>
+                      <td className='px-4 py-4'>
+                        <div className='font-semibold text-foreground'>{plan.name}</div>
                         {plan.description ? <div className='mt-1 text-xs text-muted-foreground line-clamp-2'>{plan.description}</div> : null}
                       </td>
-                      <td className='px-4 py-3 capitalize'>{plan.interval}</td>
-                      <td className='px-4 py-3'>{formatMicrosToCurrency(plan.amountRefMicros || '0')} cUSDC</td>
-                      <td className='px-4 py-3'>
-                        <code className='max-w-[220px] truncate rounded bg-muted px-2 py-1 text-[11px]'>
-                          {plan.planRef || '-'}
+                      <td className='px-4 py-4 text-sm capitalize font-medium text-foreground'>{plan.interval}</td>
+                      <td className='px-4 py-4 text-sm font-semibold text-foreground'>{formatMicrosToCurrency(plan.amountRefMicros || '0')} cUSDC</td>
+                      <td className='px-4 py-4'>
+                        <code className='max-w-[200px] truncate rounded-lg bg-muted/50 px-2.5 py-1 text-[11px] font-mono text-muted-foreground'>
+                          {plan.planRef ? plan.planRef.slice(0, 10) + '...' + plan.planRef.slice(-8) : '—'}
                         </code>
                       </td>
-                      <td className='px-4 py-3'>
+                      <td className='px-4 py-4'>
                         <span
-                          className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${
+                          className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${
                             plan.status === 'archived'
-                              ? 'border-slate-500/30 bg-slate-500/10 text-slate-600'
+                              ? 'border-slate-500/30 bg-slate-500/10 text-slate-700'
                               : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700'
                           }`}
                         >
                           {plan.status}
                         </span>
                       </td>
-                      <td className='px-4 py-3'>
+                      <td className='px-4 py-4'>
                         <div className='flex items-center gap-2'>
-                          <code className='max-w-[320px] truncate rounded bg-muted px-2 py-1 text-[11px]'>
+                          <code className='max-w-[180px] truncate rounded-lg bg-muted/50 px-2.5 py-1 text-[11px] font-mono text-muted-foreground'>
                             /subscribe/{plan.checkoutSlug}
                           </code>
-                          <Button size='sm' variant='outline' className='gap-2' onClick={() => copy(checkoutUrl, 'Checkout link')}>
-                            <Copy className='h-3.5 w-3.5' />
+                          <Button size='sm' variant='outline' className='gap-1.5 flex-shrink-0' onClick={() => copy(checkoutUrl, 'Checkout link')}>
+                            <Copy className='h-3 w-3' />
                             Copy
                           </Button>
                         </div>
                       </td>
-                      <td className='px-4 py-3'>
+                      <td className='px-4 py-4'>
                         <div className='flex flex-wrap gap-2'>
-                          <Button size='sm' variant='outline' className='gap-2' onClick={() => openEdit(plan)} disabled={plan.status === 'archived'}>
+                          <Button size='sm' variant='outline' className='gap-1.5' onClick={() => openEdit(plan)} disabled={plan.status === 'archived'}>
                             <Settings2 className='h-3.5 w-3.5' />
                             Edit
                           </Button>
                           <Button
                             size='sm'
                             variant='destructive'
-                            className='gap-2'
+                            className='gap-1.5'
                             onClick={() => handleArchive(plan)}
                             disabled={plan.status === 'archived' || submittingAction === 'archive'}
                           >
@@ -423,54 +427,57 @@ const amountMicros = parseUnits(String(editAmount), 6).toString();
 
           <div className='space-y-4'>
             <div className='space-y-2'>
-              <Label>Plan Name</Label>
-              <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+              <Label className='text-xs font-medium uppercase tracking-wide'>Plan Name</Label>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} className='rounded-xl' />
             </div>
 
             <div className='space-y-2'>
-              <Label>Description</Label>
-              <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
+              <Label className='text-xs font-medium uppercase tracking-wide'>Description</Label>
+              <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} className='rounded-xl' />
             </div>
 
-<div className='grid gap-4 sm:grid-cols-2'>
-                <div className='space-y-2'>
-                  <Label>Cadence</Label>
-                  <select
-                    value={editInterval}
-                    onChange={(e) => setEditInterval(e.target.value as PlanInterval)}
-                    className='h-10 w-full rounded-md border bg-background px-3 text-sm'
-                  >
-                    <option value='monthly'>Monthly</option>
-                    <option value='yearly'>Yearly</option>
-                    <option value='custom'>Custom (days)</option>
-                  </select>
-                </div>
-                {editInterval === 'custom' ? (
-                  <div className='space-y-2'>
-                    <Label>Custom Days</Label>
-                    <Input
-                      value={editCustomDays}
-                      onChange={(e) => setEditCustomDays(e.target.value.replace(/[^0-9]/g, ''))}
-                      type='text'
-                      inputMode='numeric'
-                      placeholder='30'
-                    />
-                  </div>
-                ) : (
-                  <div className='space-y-2'>
-                    <Label>Amount (cUSDC)</Label>
-                    <Input
-                      value={editAmount}
-                      onChange={(e) => setEditAmount(e.target.value)}
-                      type='number'
-                      min='0'
-                      step='0.000001'
-                    />
-                  </div>
-                )}
+            <div className='grid gap-4 sm:grid-cols-2'>
+              <div className='space-y-2'>
+                <Label className='text-xs font-medium uppercase tracking-wide'>Cadence</Label>
+                <Select value={editInterval} onValueChange={(value) => setEditInterval(value as PlanInterval)}>
+                  <SelectTrigger className='rounded-xl'>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value='monthly'>Monthly</SelectItem>
+                    <SelectItem value='yearly'>Yearly</SelectItem>
+                    <SelectItem value='custom'>Custom (days)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+              {editInterval === 'custom' ? (
+                <div className='space-y-2'>
+                  <Label className='text-xs font-medium uppercase tracking-wide'>Custom Days</Label>
+                  <Input
+                    value={editCustomDays}
+                    onChange={(e) => setEditCustomDays(e.target.value.replace(/[^0-9]/g, ''))}
+                    type='text'
+                    inputMode='numeric'
+                    placeholder='30'
+                    className='rounded-xl'
+                  />
+                </div>
+              ) : (
+                <div className='space-y-2'>
+                  <Label className='text-xs font-medium uppercase tracking-wide'>Amount (cUSDC)</Label>
+                  <Input
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                    type='number'
+                    min='0'
+                    step='0.000001'
+                    className='rounded-xl'
+                  />
+                </div>
+              )}
+            </div>
 
-            <div className='flex items-center justify-end gap-2'>
+            <div className='flex items-center justify-end gap-2 pt-2'>
               <Button variant='outline' onClick={() => setEditing(null)}>
                 Cancel
               </Button>

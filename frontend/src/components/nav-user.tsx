@@ -93,7 +93,7 @@ export function NavUser({
                     onClick={() => me?.account && copyToClipboard(me.account)}
                   >
                     {copied ? (
-                      <IconCircleCheck className='h-3 w-3 text-green-500' />
+                      <IconCircleCheck className='h-3 w-3 text-[color:var(--status-success)]' />
                     ) : (
                       <IconCopy className='h-3 w-3' />
                     )}

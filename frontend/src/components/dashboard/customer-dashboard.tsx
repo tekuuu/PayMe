@@ -298,7 +298,7 @@ export default function CustomerDashboardPage() {
       </div>
 
       {(decryptError || serverSignerError) && (
-        <p className='text-sm text-rose-500 text-center'>
+        <p className='text-sm text-[color:var(--status-error)] text-center'>
           {decryptError || serverSignerError}
         </p>
       )}
@@ -408,7 +408,7 @@ export default function CustomerDashboardPage() {
       </div>
 
       {(decryptError || serverSignerError) && (
-        <p className='text-sm text-rose-500 text-center'>
+        <p className='text-sm text-[color:var(--status-error)] text-center'>
           {decryptError || serverSignerError}
         </p>
       )}

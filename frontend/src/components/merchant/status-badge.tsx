@@ -3,30 +3,31 @@
 import { Badge } from '@/components/ui/badge';
 import type { BillingCycleStatus, FailureClass, SubscriptionStatus } from '@/lib/merchant/types';
 import { cn } from '@/lib/utils';
+import { statusBadgeClasses } from '@/lib/design-system';
 
 const subscriptionStatusStyles: Record<SubscriptionStatus, string> = {
-  trialing: 'bg-sky-500/15 text-sky-700 border-sky-500/30',
-  incomplete: 'bg-slate-500/15 text-slate-700 border-slate-500/30',
-  active: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30',
-  past_due: 'bg-amber-500/15 text-amber-700 border-amber-500/30',
-  unpaid: 'bg-rose-500/15 text-rose-700 border-rose-500/30',
-  paused: 'bg-violet-500/15 text-violet-700 border-violet-500/30',
-  canceled: 'bg-zinc-500/15 text-zinc-700 border-zinc-500/30',
-  incomplete_expired: 'bg-zinc-500/15 text-zinc-700 border-zinc-500/30',
+  trialing: statusBadgeClasses.pending,
+  incomplete: statusBadgeClasses.incomplete,
+  active: statusBadgeClasses.active,
+  past_due: statusBadgeClasses.past_due,
+  unpaid: statusBadgeClasses.unpaid,
+  paused: statusBadgeClasses.paused,
+  canceled: statusBadgeClasses.canceled,
+  incomplete_expired: statusBadgeClasses.incomplete_expired,
 };
 
 const billingStatusStyles: Record<BillingCycleStatus, string> = {
-  draft: 'bg-slate-500/15 text-slate-700 border-slate-500/30',
-  open: 'bg-blue-500/15 text-blue-700 border-blue-500/30',
-  paid: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30',
-  uncollectible: 'bg-rose-500/15 text-rose-700 border-rose-500/30',
-  void: 'bg-zinc-500/15 text-zinc-700 border-zinc-500/30',
+  draft: statusBadgeClasses.draft,
+  open: statusBadgeClasses.open,
+  paid: statusBadgeClasses.paid,
+  uncollectible: statusBadgeClasses.uncollectible,
+  void: statusBadgeClasses.void,
 };
 
 const failureClassStyles: Record<FailureClass, string> = {
-  recoverable_transient: 'bg-sky-500/15 text-sky-700 border-sky-500/30',
-  requires_customer_action: 'bg-amber-500/15 text-amber-700 border-amber-500/30',
-  hard_failure: 'bg-rose-500/15 text-rose-700 border-rose-500/30',
+  recoverable_transient: statusBadgeClasses.recoverable_transient,
+  requires_customer_action: statusBadgeClasses.requires_customer_action,
+  hard_failure: statusBadgeClasses.hard_failure,
 };
 
 export function SubscriptionStatusBadge({ status }: { status: SubscriptionStatus }) {

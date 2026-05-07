@@ -754,18 +754,18 @@ export function ShieldCard({ me }: { me: Me }) {
 
       {/* Pending Unwrap Banner */}
       {pendingUnwrap && !successTxHash && (
-        <div className='rounded-xl bg-amber-500/10 border border-amber-500/30 p-4 space-y-3'>
+        <div className='rounded-xl bg-[color:var(--status-warning)]/10 border border-[color:var(--status-warning)]/30 p-4 space-y-3'>
           <div className='flex items-center justify-between'>
             <div className='flex items-center gap-2'>
-              <Clock size={16} className='text-amber-500' />
-              <p className='text-sm font-medium text-amber-500'>Pending Finalization</p>
+              <Clock size={16} className='text-[color:var(--status-warning)]' />
+              <p className='text-sm font-medium text-[color:var(--status-warning)]'>Pending Finalization</p>
             </div>
             <div className='flex items-center gap-2'>
               <Button
                 type='button'
                 variant='ghost'
                 size='sm'
-                className='rounded-full text-amber-500/60 hover:bg-amber-500/20 text-xs h-7'
+                className='rounded-full text-[color:var(--status-warning)]/60 hover:bg-[color:var(--status-warning)]/20 text-xs h-7'
                 onClick={clearPendingUnwrap}
               >
                 Clear
@@ -774,7 +774,7 @@ export function ShieldCard({ me }: { me: Me }) {
                 type='button'
                 variant='outline'
                 size='sm'
-                className='rounded-full border-amber-500/30 text-amber-500 hover:bg-amber-500/20 text-xs'
+                className='rounded-full border-[color:var(--status-warning)]/30 text-[color:var(--status-warning)] hover:bg-[color:var(--status-warning)]/20 text-xs'
                 onClick={handleFinalize}
                 disabled={isFinalizing}
               >
@@ -789,11 +789,11 @@ export function ShieldCard({ me }: { me: Me }) {
               </Button>
             </div>
           </div>
-          <p className='text-xs text-amber-500/70'>
+          <p className='text-xs text-[color:var(--status-warning)]/70'>
             {pendingUnwrap.amount} cUSDC burned. Click Finalize to receive USDC.
           </p>
           {pendingUnwrap.timestamp && (
-            <p className='text-[10px] text-amber-500/50'>
+            <p className='text-[10px] text-[color:var(--status-warning)]/50'>
               Created: {new Date(pendingUnwrap.timestamp).toLocaleTimeString()}
             </p>
           )}
@@ -803,8 +803,8 @@ export function ShieldCard({ me }: { me: Me }) {
       {/* Success State */}
       {successTxHash && (
         <div className='flex flex-col items-center gap-3 py-6 text-center'>
-          <div className='flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10'>
-            <CheckCircle2 className='h-6 w-6 text-emerald-500' />
+          <div className='flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--status-success)]/10'>
+            <CheckCircle2 className='h-6 w-6 text-[color:var(--status-success)]' />
           </div>
           <p className='text-sm font-medium text-foreground'>
             {lastMode === 'shield' ? 'Shield Successful' : 'Unshield Successful'}

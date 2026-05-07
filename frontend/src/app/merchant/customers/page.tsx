@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Download } from 'lucide-react';
+import { Download, Search, RefreshCw } from 'lucide-react';
 import { useMe } from '@/providers/auth-provider';
 import { useMerchantControlPlane } from '@/hooks/use-merchant-control-plane';
 import { SubscriptionStatusBadge } from '@/components/merchant/status-badge';
@@ -16,7 +16,7 @@ function shortAddress(address: string) {
 
 export default function CustomersPage() {
   const { me } = useMe();
-  const { state } = useMerchantControlPlane(me?.account);
+  const { state, refresh } = useMerchantControlPlane(me?.account);
   const [query, setQuery] = useState('');
 
   const customerRows = useMemo(() => {
@@ -68,84 +68,107 @@ export default function CustomersPage() {
     });
   }, [customerRows, query]);
 
+  const stats = useMemo(() => {
+    return {
+      total: customerRows.length,
+      active: customerRows.reduce((sum, row) => sum + row.active, 0),
+      atRisk: customerRows.reduce((sum, row) => sum + row.pastDue, 0),
+    };
+  }, [customerRows]);
+
   return (
-    <div className='flex-1 space-y-4 p-6'>
-      <div className='max-w-3xl flex items-center justify-between gap-4'>
-        <div>
-          <h2 className='text-2xl font-semibold tracking-tight text-foreground'>Customers</h2>
-          <p className='mt-1 text-sm text-muted-foreground'>Subscriber account lens with risk and lifecycle context.</p>
-        </div>
-        <Button disabled variant='outline' className='gap-2'>
-          <Download className='h-4 w-4' />
-          Export CSV
+    <div className='flex-1 space-y-6 p-6'>
+      <div className='space-y-1'>
+        <h2 className='text-2xl font-semibold tracking-tight text-foreground'>Customers</h2>
+        <p className='text-sm text-muted-foreground'>
+          Subscriber account overview with subscription health and lifecycle tracking.
+        </p>
+      </div>
+      <div className='h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
+
+      <div className='flex items-center gap-2'>
+        <Button variant='outline' className='gap-2' onClick={() => refresh()}>
+          <RefreshCw className='h-4 w-4' />
+          Refresh
         </Button>
       </div>
-      <div className='max-w-3xl h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
 
-      <div className='max-w-3xl grid gap-3 md:grid-cols-3'>
-        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5'>
-          <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Customers</p>
-          <p className='mt-2 text-2xl font-semibold tabular-nums'>{customerRows.length}</p>
+      {/* Stats */}
+      <div className='grid grid-cols-3 gap-4'>
+        <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+          <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+          <div className='relative p-6 min-h-[140px] flex flex-col justify-between'>
+            <p className='text-[10px] uppercase tracking-wider font-medium text-muted-foreground'>Total Customers</p>
+            <p className='text-3xl font-bold text-foreground tabular-nums'>{stats.total}</p>
+          </div>
         </div>
-        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5'>
-          <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>Active Agreements</p>
-          <p className='mt-2 text-2xl font-semibold tabular-nums text-emerald-600'>
-            {(state?.subscriptions || []).filter((item) => item.status === 'active').length}
-          </p>
+        <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+          <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+          <div className='relative p-6 min-h-[140px] flex flex-col justify-between'>
+            <p className='text-[10px] uppercase tracking-wider font-medium text-muted-foreground'>Active Agreements</p>
+            <p className='text-3xl font-bold text-foreground tabular-nums'>{stats.active}</p>
+          </div>
         </div>
-        <div className='rounded-xl border border-border/60 bg-card/50 backdrop-blur p-5'>
-          <p className='text-[11px] uppercase tracking-wide text-muted-foreground'>At Risk (Past Due/Unpaid)</p>
-          <p className='mt-2 text-2xl font-semibold tabular-nums text-amber-600'>
-            {(state?.subscriptions || []).filter((item) => item.status === 'past_due' || item.status === 'unpaid').length}
-          </p>
+        <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur relative overflow-hidden group'>
+          <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+          <div className='relative p-6 min-h-[140px] flex flex-col justify-between'>
+            <p className='text-[10px] uppercase tracking-wider font-medium text-muted-foreground'>At Risk</p>
+            <p className='text-3xl font-bold text-foreground tabular-nums'>{stats.atRisk}</p>
+          </div>
         </div>
       </div>
 
-      <div className='max-w-3xl rounded-xl border border-border/60 bg-card/50 backdrop-blur overflow-hidden'>
-        <div className='border-b border-border/40 p-4'>
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder='Search by customer card or wallet...'
-          />
+      {/* Table */}
+      <div className='rounded-2xl border border-border/40 bg-gradient-to-br from-card via-card/90 to-muted/20 backdrop-blur overflow-hidden'>
+        <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent' />
+        <div className='relative border-b border-border/40 p-4'>
+          <div className='relative'>
+            <Search className='absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground' />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder='Search by customer card or wallet...'
+              className='pl-9 rounded-xl'
+            />
+          </div>
         </div>
         <div className='overflow-x-auto'>
           <table className='w-full text-sm'>
             <thead className='border-b border-border/40 bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground'>
               <tr>
-                <th className='px-4 py-3 font-medium'>Customer Card</th>
-                <th className='px-4 py-3 font-medium'>Wallet</th>
-                <th className='px-4 py-3 font-medium'>Agreements</th>
-                <th className='px-4 py-3 font-medium'>Health</th>
-                <th className='px-4 py-3 font-medium'>Last Activity</th>
+                <th className='px-4 py-4 font-semibold'>Customer Card</th>
+                <th className='px-4 py-4 font-semibold'>Wallet</th>
+                <th className='px-4 py-4 font-semibold'>Agreements</th>
+                <th className='px-4 py-4 font-semibold'>Status</th>
+                <th className='px-4 py-4 font-semibold'>Last Activity</th>
               </tr>
             </thead>
             <tbody className='divide-y divide-border/30'>
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className='px-4 py-12 text-center text-muted-foreground'>
+                  <td colSpan={5} className='px-4 py-8 text-center text-muted-foreground'>
                     No customer records yet. Run checkout approvals or billing pulls to populate this table.
                   </td>
                 </tr>
               ) : (
                 filteredRows.map((row) => (
-                  <tr key={row.customerCardAddress}>
-                    <td className='px-4 py-3 font-mono text-xs'>{shortAddress(row.customerCardAddress)}</td>
-                    <td className='px-4 py-3 font-mono text-xs'>{shortAddress(row.customerSmartWallet || '-')}</td>
-                    <td className='px-4 py-3'>
-                      <div className='text-xs tabular-nums text-muted-foreground'>
-                        {row.agreements} total &middot; {row.active} active &middot; {row.pastDue} risk
+                  <tr key={row.customerCardAddress} className='hover:bg-muted/40 transition-colors'>
+                    <td className='px-4 py-4 font-mono text-xs text-muted-foreground'>{shortAddress(row.customerCardAddress)}</td>
+                    <td className='px-4 py-4 font-mono text-xs text-muted-foreground'>{shortAddress(row.customerSmartWallet || '-')}</td>
+                    <td className='px-4 py-4'>
+                      <div className='text-xs font-semibold text-foreground'>
+                        {row.agreements} total <span className='text-muted-foreground'>·</span> {row.active} active <span className='text-muted-foreground'>·</span> {row.pastDue} at risk
                       </div>
                     </td>
-                    <td className='px-4 py-3'>
+                    <td className='px-4 py-4'>
                       <div className='flex flex-wrap gap-2'>
                         {[...row.statuses].slice(0, 3).map((status) => (
                           <SubscriptionStatusBadge key={status} status={status} />
                         ))}
                       </div>
                     </td>
-                    <td className='px-4 py-3 text-xs text-muted-foreground'>
-                      {row.latestActivity ? new Date(row.latestActivity).toLocaleString() : '-'}
+                    <td className='px-4 py-4 text-xs text-muted-foreground'>
+                      {row.latestActivity ? new Date(row.latestActivity).toLocaleString() : '—'}
                     </td>
                   </tr>
                 ))
