@@ -193,10 +193,10 @@ export default function CustomerDashboardPage() {
   ];
 
   return (
-    <div className='flex-1 space-y-4 p-6'>
+    <div className='flex-1 space-y-5 p-6'>
       {/* Header */}
       <div className='space-y-1'>
-        <h2 className='text-2xl font-semibold tracking-tight text-foreground'>Dashboard</h2>
+        <h2 className='text-sm font-bold uppercase tracking-[0.22em] text-foreground sm:text-base'>Dashboard</h2>
       </div>
       <div className='h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
 

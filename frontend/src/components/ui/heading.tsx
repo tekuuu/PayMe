@@ -10,11 +10,11 @@ export const Heading: React.FC<HeadingProps> = ({
   description
 }) => {
   return (
-    <div>
-      <div className='flex items-center gap-2'>
-        <h2 className='text-3xl font-bold tracking-tight'>{title}</h2>
-      </div>
-      <p className='text-muted-foreground text-sm'>{description}</p>
+    <div className='space-y-1'>
+      <h2 className='text-sm font-bold uppercase tracking-[0.22em] text-foreground sm:text-base'>
+        {title}
+      </h2>
+      {description ? <p className='text-sm text-muted-foreground'>{description}</p> : null}
     </div>
   );
 };

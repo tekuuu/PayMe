@@ -96,10 +96,7 @@ export default function MerchantContractsPage() {
   return (
     <div className='flex-1 space-y-6 p-6'>
       <div className='space-y-1'>
-        <h2 className='text-2xl font-semibold tracking-tight text-foreground'>Contract Controls</h2>
-        <p className='text-sm text-muted-foreground'>
-          Verify card ownership and subscription permission state before triggering billing operations.
-        </p>
+        <h2 className='text-sm font-bold uppercase tracking-[0.22em] text-foreground sm:text-base'>Contract Controls</h2>
       </div>
       <div className='h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
 

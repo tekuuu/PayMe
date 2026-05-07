@@ -352,10 +352,7 @@ export default function MerchantBillingCyclesPage() {
   return (
     <div className='flex-1 space-y-6 p-6'>
       <div className='space-y-1'>
-        <h2 className='text-2xl font-semibold tracking-tight text-foreground'>Billing Cycles</h2>
-        <p className='text-sm text-muted-foreground'>
-          Track and manage billing operations, monitor payment attempts, and control retry strategies with complete visibility.
-        </p>
+        <h2 className='text-sm font-bold uppercase tracking-[0.22em] text-foreground sm:text-base'>Billing Cycles</h2>
       </div>
       <div className='h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
 

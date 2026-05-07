@@ -13,6 +13,8 @@ import {
   IconBrandGithub,
   IconBrandTelegram,
 } from '@tabler/icons-react';
+import { FAQSection } from '@/components/faq-section';
+import { UseCasesSection } from '@/components/use-cases-section';
 
 const techStack = [
   'Zama fhEVM',
@@ -89,26 +91,23 @@ function Nav() {
 function Hero() {
   return (
     <section className='relative min-h-screen overflow-hidden bg-background'>
-      {/* Subtle background gradient */}
+      {/* Gradient background */}
       <div className='pointer-events-none absolute inset-0'>
         <div className='absolute top-0 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-primary/10 blur-3xl' />
       </div>
 
       <div className='relative mx-auto flex max-w-7xl flex-col items-center justify-center px-6 pt-40 pb-20 lg:px-8'>
-        {/* Main headline */}
-        <h1 className='max-w-4xl text-center text-5xl font-bold leading-[1.05] tracking-tight md:text-7xl lg:text-8xl'>
+        <h1 className='max-w-4xl text-center font-serif text-5xl font-bold leading-[1.05] tracking-tight md:text-7xl lg:text-8xl'>
           Private payments.
           <br />
           <span className='text-muted-foreground'>For the open internet.</span>
         </h1>
 
-        {/* Subtitle */}
         <p className='mx-auto mt-6 max-w-lg text-center text-lg text-muted-foreground md:text-xl'>
           A passkey-secured smart wallet where every balance, transfer, and
           subscription runs encrypted on-chain.
         </p>
 
-        {/* CTA */}
         <div className='mt-10'>
           <Link
             href='/dashboard/my-card'
@@ -377,6 +376,8 @@ export default function Page() {
       <TechStack />
       <ProblemSolution />
       <Features />
+      <UseCasesSection />
+      <FAQSection />
       <CTABanner />
       <Footer />
     </main>

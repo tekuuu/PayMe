@@ -174,7 +174,7 @@ export default function MyCardPage() {
         <div className='flex-1 space-y-4 sm:space-y-6 p-3 sm:p-6'>
             {/* Header */}
             <div className='space-y-3'>
-                <h2 className='text-xl sm:text-2xl font-semibold tracking-tight text-foreground'>
+                <h2 className='text-sm font-bold uppercase tracking-[0.22em] text-foreground sm:text-base'>
                     My Card
                 </h2>
                 <div className='h-px bg-gradient-to-r from-transparent via-foreground/20 to-transparent' />

@@ -157,10 +157,10 @@ export default function ActivityPage() {
   }
 
   return (
-    <div className='flex-1 space-y-4 p-6'>
+    <div className='flex-1 space-y-5 p-6'>
       {/* Header */}
       <div className='space-y-3'>
-        <h2 className='text-2xl font-semibold tracking-tight'>Activity</h2>
+        <h2 className='text-sm font-bold uppercase tracking-[0.22em] text-foreground sm:text-base'>Activity</h2>
         <div className='h-px bg-gradient-to-r from-transparent via-foreground/20 to-transparent' />
       </div>
 

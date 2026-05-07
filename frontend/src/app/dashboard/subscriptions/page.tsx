@@ -569,10 +569,7 @@ export default function SubscriptionsPage() {
   return (
     <div className='flex-1 space-y-6 p-6'>
       <div className='space-y-1'>
-        <h2 className='text-2xl font-semibold tracking-tight text-foreground'>Subscriptions</h2>
-        <p className='text-sm text-muted-foreground'>
-          View and manage your active subscriptions and billing cycles.
-        </p>
+        <h2 className='text-sm font-bold uppercase tracking-[0.22em] text-foreground sm:text-base'>Subscriptions</h2>
       </div>
       <div className='h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
 

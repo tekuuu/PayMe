@@ -1,10 +1,8 @@
 @import 'tailwindcss';
-
 @import 'tw-animate-css';
+@import './theme.css';
 
 @custom-variant dark (&:is(.dark *));
-
-@import './theme.css';
 
 @layer base {
   html {
@@ -32,6 +30,55 @@
   --font-size-9xl: 8rem;
 }
 
+@layer utilities {
+  .font-serif {
+    font-family: 'EB Garamond', serif;
+  }
+
+  .heading-lg {
+    @apply text-4xl font-bold leading-tight tracking-tight md:text-6xl lg:text-7xl font-serif;
+  }
+
+  .heading-md {
+    @apply text-3xl font-bold leading-tight tracking-tight md:text-5xl font-serif;
+  }
+
+  .pulsing-dot::before {
+    content: '';
+    @apply absolute inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse;
+  }
+
+  .grid-divider {
+    @apply border-b border-border/20;
+  }
+
+  .slide-up-animation {
+    animation: slide-up 0.6s ease-out forwards;
+    opacity: 0;
+  }
+
+  .fade-in-animation {
+    animation: fade-in 0.8s ease-out forwards;
+  }
+
+  .gradient-shift-animation {
+    animation: gradient-shift 6s ease infinite;
+    background-size: 200% 200%;
+  }
+
+  .btn-primary-hover {
+    @apply transition-all duration-200 hover:shadow-lg hover:shadow-primary/20;
+  }
+}
+
+@supports (animation-timeline: view()) {
+  .scroll-reveal {
+    animation: slide-up 0.6s ease-out forwards;
+    animation-timeline: view();
+    animation-range: entry 0% cover 30%;
+  }
+}
+
 /* View Transition Wave Effect */
 ::view-transition-old(root),
 ::view-transition-new(root) {
@@ -51,19 +98,52 @@
 
 @keyframes reveal {
   from {
-    /* Use CSS variables for the origin, defaulting to center if not set */
     clip-path: circle(0% at var(--x, 50%) var(--y, 50%));
     opacity: 0.7;
   }
 
   to {
-    /* Use CSS variables for the origin, defaulting to center if not set */
     clip-path: circle(150% at var(--x, 50%) var(--y, 50%));
     opacity: 1;
   }
 }
 
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
 ::view-transition-new(root) {
-  /* Apply the reveal animation */
   animation: reveal 0.4s ease-in-out forwards;
 }
