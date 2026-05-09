@@ -25,10 +25,12 @@ This repository contains the frontend application, smart contracts, deployment s
 - [API Surface](#api-surface)
 - [Security and Trust Boundaries](#security-and-trust-boundaries)
 - [End-To-End Flow](#end-to-end-flow)
+- [Getting Started](#getting-started)
 - [Local Development](#local-development)
+- [Testing](#testing)
+- [Developer Workflow](#developer-workflow)
+- [Technical Notes](#technical-notes)
 - [Mainnet Readiness Notes](#mainnet-readiness-notes)
-- [Known Prototype Limits](#known-prototype-limits)
-- [Roadmap](#roadmap)
 - [References](#references)
 
 ## Project Overview
@@ -146,87 +148,110 @@ Operational Layer:
 sequenceDiagram
     participant User as Customer
     participant Merchant as Merchant Operator
-    participant UI as PayMe Frontend
+    participant App as PayMe App Frontend
+    participant MUI as Merchant Frontend
+    participant Checkout as /embed/checkout
     participant SDK as Zama Relayer SDK
-    participant AA as ERC-4337 (Bundler+EntryPoint)
+    participant AA as Smart Wallet + Bundler
     participant Registry as SubscriptionPlanRegistry
+    participant Factory as CardFactory
     participant Card as PrivateCard
-    participant CP as Merchant Metadata Store
+    participant CP as Browser Metadata Store
 
     rect rgb(38,38,68)
         Note over Merchant,Registry: STEP 0 · Merchant creates plan
-        Merchant->>UI: Create/Update plan terms
-        UI->>AA: submit UserOperation for plan publish
+        Merchant->>MUI: Create/Update plan terms
+        MUI->>AA: submit UserOperation for plan publish
         AA->>Registry: register/update plan reference
-        UI->>CP: store plan metadata and status
+        MUI->>CP: store local plan metadata
     end
 
     rect rgb(20,40,70)
         Note over User,Card: STEP 1 · Customer wallet and card setup
-        User->>UI: Register/Login with passkey
-        UI->>AA: Deploy/initialize smart account (if needed)
-        UI->>Card: Create card via CardFactory
-        Card-->>UI: cardAddress + ownership context
+        User->>App: Register/Login with passkey
+        App->>AA: deploy/initialize smart account
+        AA->>Factory: createCard()
+        Factory-->>Card: deploy customer card
+        Card-->>App: cardAddress + ownership context
     end
 
     rect rgb(20,70,45)
         Note over User,Card: STEP 2 · Subscription approval and first charge
-        Merchant->>UI: Share checkout link with plan reference
-        User->>UI: Open checkout link
-        UI->>SDK: Encrypt allowance/amount
-        SDK-->>UI: handles + inputProof
-        UI->>AA: submit UserOperation for subscribe + initial charge
+        Merchant->>MUI: Share checkout link
+        User->>Checkout: Open merchant checkout
+        Checkout->>SDK: encrypt amount/allowance
+        SDK-->>Checkout: handles + inputProof
+        Checkout->>AA: submit UserOperation
         AA->>Card: execute card subscription call
-        UI->>CP: register agreement and cycle metadata
+        Checkout->>CP: register agreement and first cycle metadata
     end
 
     rect rgb(70,45,20)
         Note over Merchant,CP: STEP 3 · Merchant billing and recovery
-        Merchant->>UI: Open billing/recovery view
-        UI->>CP: compute due subscriptions and retry queue
-        Merchant->>UI: Trigger due charges
-        UI->>AA: submit renewal UserOperation(s)
-        AA->>Card: renewal pull against approved refs
-        UI->>CP: save success/failure attempts
-        Merchant->>UI: Retry failed items
-        UI->>AA: submit retry UserOperation(s)
+        Merchant->>MUI: Open billing/recovery view
+        MUI->>CP: read due subscriptions and retry queue
+        Merchant->>MUI: Trigger due charges or retries
+        MUI->>AA: submit renewal UserOperation(s)
+        AA->>Card: chargeSubscriptionRefRenewal() or pullSubscriptionWithProof()
+        MUI->>CP: save attempt results and next cycle state
     end
 ```
+
+Implementation notes for this flow:
+
+- `SubscriptionPlanRegistry` stores merchant plan references on-chain.
+- merchant operational state is stored in the browser control-plane store, not a server database.
+- checkout approval is handled by [`page.tsx`](/home/zoe/Documents/zama/PayMe/frontend/src/app/embed/checkout/page.tsx).
+- billing/retry execution is handled by [`page.tsx`](/home/zoe/Documents/zama/PayMe/frontend/src/app/merchant/billing-cycles/page.tsx).
 
 ## Component Interaction View
 
 ```mermaid
 %%{init: {'theme':'dark', 'themeVariables': { 'primaryColor':'#a78bfa', 'primaryTextColor':'#ffffff', 'primaryBorderColor':'#8b5cf6', 'lineColor':'#a78bfa', 'secondaryColor':'#0f172a', 'tertiaryColor':'#1e293b', 'background':'#0b1020', 'mainBkg':'#111827', 'secondBkg':'#1f2937', 'labelBackground':'#1f2937', 'labelTextColor':'#ffffff'}}}%%
-flowchart TB
-    subgraph MERCHANT["Merchant Actions"]
-      MPLAN["Create/Update Plans"]
-      MBILL["Run Billing Cycles"]
-      MREC["Run Recovery Retries"]
+flowchart LR
+    subgraph MERCHANT["Merchant Frontend"]
+      MPLAN["Plans Page"]
+      MBILL["Billing Cycles Page"]
+      MREC["Recovery / Retry Actions"]
     end
 
-    subgraph CUSTOMER["Customer Actions"]
-      CSET["Wallet/Card Setup"]
-      CSUB["Checkout + Subscribe"]
+    subgraph CUSTOMER["Customer Frontend"]
+      CSET["Passkey + Smart Wallet Setup"]
+      CBAL["Balance / Decrypt Views"]
+      CSUB["Checkout / Subscribe"]
     end
 
-    subgraph ONCHAIN["On-chain Targets"]
+    subgraph FHE["FHE Integration"]
+      SDK["Relayer SDK"]
+      DECRYPT["/api/fhe/sign-user-decrypt"]
+    end
+
+    subgraph ONCHAIN["On-chain Contracts"]
       SPR["SubscriptionPlanRegistry"]
-      PC["PrivateCard"]
       CF["CardFactory"]
+      PC["PrivateCard"]
     end
 
-    MCP["Merchant Metadata Store"]
+    MCP["Browser Metadata Store"]
 
     CSET --> CF
+    CBAL --> DECRYPT
+    CSUB --> SDK
     CSUB --> PC
-    MPLAN --> SPR
-    MBILL --> PC
-    MREC --> PC
-    MPLAN --> MCP
-    MBILL --> MCP
-    MREC --> MCP
     CSUB --> MCP
+    MPLAN --> SPR
+    MPLAN --> MCP
+    MBILL --> PC
+    MBILL --> MCP
+    MREC --> PC
+    MREC --> MCP
 ```
+
+This view reflects the current repo layout:
+
+- merchant pages update both on-chain plan/card state and local metadata
+- customer checkout touches the relayer SDK and then writes agreement metadata locally after success
+- the decrypt-signing API route supports balance/decrypt flows, not merchant plan creation
 
 ## Detailed Architecture
 
@@ -407,6 +432,57 @@ Core client integration points:
 3. Success/failure attempts are recorded.
 4. Past-due agreements move into recovery queue with retry policy.
 
+## Getting Started
+
+### Prerequisites
+
+- Node.js `20+`
+- npm `7+`
+- a Sepolia RPC provider key
+- a funded Sepolia deployer key if you want to deploy contracts
+- access to a bundler endpoint compatible with your frontend configuration
+
+### Clone The Repository
+
+```bash
+git clone https://github.com/tekuuu/PayMe.git
+cd PayMe
+```
+
+### Install Dependencies
+
+This repository currently uses separate package installs for the frontend and Hardhat workspaces.
+
+```bash
+cd hardhat
+npm install
+
+cd ../frontend
+npm install
+```
+
+### Configure Environment Files
+
+Contract workspace:
+
+- create or update `hardhat/.env`
+- set `INFURA_API_KEY`
+- set `PRIVATE_KEY`
+- set any wrapper/token addresses required by the deployment scripts
+
+Frontend workspace:
+
+- create or update `frontend/.env.local`
+- set `NEXT_PUBLIC_RPC_ENDPOINT`
+- set `NEXT_PUBLIC_BUNDLER_URL`
+- set deployed contract addresses
+- set `RELAYER_PRIVATE_KEY` for the decrypt-signing route
+
+For the current expected variables, use:
+
+- [frontend/README.md](/home/zoe/Documents/zama/PayMe/frontend/README.md)
+- [hardhat/README.md](/home/zoe/Documents/zama/PayMe/hardhat/README.md)
+
 ## Contract Inventory
 
 - [PrivateCard.sol](/home/zoe/Documents/zama/PayMe/hardhat/contracts/PrivateCard.sol)
@@ -423,30 +499,28 @@ Core client integration points:
 
 ## Local Development
 
-### 1. Contracts
+### 1. Compile Contracts
 
 ```bash
 cd hardhat
-npm install
 npx hardhat compile
+```
+
+### 2. Deploy Contracts If Needed
+
+```bash
+cd hardhat
 npx hardhat run scripts/deploy_payme_core.ts --network sepolia
 ```
 
-### 2. Frontend
+After deployment, propagate the relevant addresses into `frontend/.env.local`.
+
+### 3. Start The Frontend
 
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
-
-### 3. Configure Environment
-
-- set frontend chain/RPC and contract addresses
-- set `RELAYER_PRIVATE_KEY` for user decrypt signing route
-- verify bundler/entrypoint settings match deployed environment
-
-Use [hardhat/README.md](/home/zoe/Documents/zama/PayMe/hardhat/README.md) and [frontend/README.md](/home/zoe/Documents/zama/PayMe/frontend/README.md) for concrete env variable lists.
 
 ### 4. Validate End-To-End
 
@@ -459,6 +533,63 @@ Suggested local validation path:
 5. run at least one renewal and inspect cycle/attempt state
 6. validate decrypt-enabled balance views and error handling
 
+## Testing
+
+Current project-level test commands:
+
+Contracts:
+
+```bash
+cd hardhat
+npm test
+```
+
+Useful contract commands:
+
+```bash
+cd hardhat
+npx hardhat compile
+npx hardhat coverage
+```
+
+Notes:
+
+- the Hardhat workspace now has `unit` and `integration` test directories
+- fhEVM-heavy flows require the Hardhat fhEVM plugin and mock environment to be available
+- some private-payment execution paths depend on ACL-sensitive encrypted handles, so integration tests should focus on stable contract behavior and explicit permissioned flows
+
+## Developer Workflow
+
+Recommended workflow for contributors:
+
+1. read this root README, then the workspace README you are modifying
+2. compile the Hardhat workspace before changing contract interfaces
+3. keep frontend contract addresses and ABI expectations aligned with contract changes
+4. test merchant flow changes against both customer and merchant routes
+5. document any new environment variables or deployment assumptions in the relevant README
+
+When changing contracts:
+
+- check [hardhat/contracts/PrivateCard.sol](/home/zoe/Documents/zama/PayMe/hardhat/contracts/PrivateCard.sol)
+- review deployment scripts under [hardhat/scripts](/home/zoe/Documents/zama/PayMe/hardhat/scripts)
+- verify frontend usage in [frontend/src/app/embed/checkout/page.tsx](/home/zoe/Documents/zama/PayMe/frontend/src/app/embed/checkout/page.tsx) and related hooks
+
+When changing frontend confidential flows:
+
+- review [frontend/src/lib/fhevm-sdk/internal/fhevm.ts](/home/zoe/Documents/zama/PayMe/frontend/src/lib/fhevm-sdk/internal/fhevm.ts)
+- review [frontend/src/hooks/use-confidential-token-balance.ts](/home/zoe/Documents/zama/PayMe/frontend/src/hooks/use-confidential-token-balance.ts)
+- review [frontend/src/app/api/fhe/sign-user-decrypt/route.ts](/home/zoe/Documents/zama/PayMe/frontend/src/app/api/fhe/sign-user-decrypt/route.ts)
+
+## Technical Notes
+
+Important implementation notes for new developers:
+
+- the merchant control plane is currently local metadata, not a durable backend ledger
+- the frontend and contracts are tightly coupled through deployed addresses and checkout assumptions
+- the active network target is Sepolia, with mainnet migration notes documented separately
+- fhEVM flows require careful ACL handling when moving encrypted values across contracts
+- the root README is the overview; the workspace READMEs contain lower-level setup details
+
 ## Mainnet Readiness Notes
 
 The current prototype is Sepolia-first. Mainnet support requires:
@@ -469,21 +600,6 @@ The current prototype is Sepolia-first. Mainnet support requires:
 - infrastructure hardening for billing automation and observability
 
 See [docs/mainnet.md](/home/zoe/Documents/zama/PayMe/docs/mainnet.md) for full migration details.
-
-## Known Prototype Limits
-
-- no full external security audit completed
-- merchant control plane persistence is currently prototype-grade
-- limited production-grade observability and reconciliation services
-- relayer and key-management hardening required before production launch
-
-## Roadmap
-
-1. network-aware fhEVM config abstraction (Sepolia/mainnet)
-2. durable merchant backend and reconciliation workers
-3. automated billing worker model with queue and retry policy controls
-4. stronger monitoring, error budgets, and operational playbooks
-5. external security review for contracts and signing flows
 
 ## References
 
