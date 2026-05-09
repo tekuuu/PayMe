@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { statusBadgeClasses } from '@/lib/design-system';
 
 const subscriptionStatusStyles: Record<SubscriptionStatus, string> = {
-  trialing: statusBadgeClasses.pending,
+  trialing: statusBadgeClasses.incomplete,
   incomplete: statusBadgeClasses.incomplete,
   active: statusBadgeClasses.active,
   past_due: statusBadgeClasses.past_due,
