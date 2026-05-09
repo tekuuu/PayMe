@@ -2,27 +2,25 @@
 
 # PayMe
 
-PayMe is a confidential subscription and payments protocol built with:
+PayMe is a private subscription and payments system built on ERC-4337 account abstraction, WebAuthn passkeys, and Zama fhEVM.
 
-- ERC-4337 account abstraction for gas-abstracted smart wallet UX
-- WebAuthn passkeys for user authentication and wallet control
-- Zama FHEVM for encrypted balances, encrypted approvals, and private payment execution
-- Merchant subscription orchestration with customer-first privacy guarantees
-
-The project is designed as a contest-grade prototype showing end-to-end private recurring payments, from user onboarding to merchant billing and recovery.
+This repository contains the frontend application, smart contracts, deployment scripts, and supporting documentation for the current prototype.
 
 ## Table Of Contents
 
-- [Why PayMe](#why-payme)
-- [Project Evolution](#project-evolution)
-- [What We Built](#what-we-built)
+- [Project Overview](#project-overview)
+- [Implementation Status](#implementation-status)
+- [System Scope](#system-scope)
 - [Core Technologies](#core-technologies)
 - [Repository Structure](#repository-structure)
+- [Personas and Use Cases](#personas-and-use-cases)
 - [Protocol Flow](#protocol-flow)
 - [Component Interaction View](#component-interaction-view)
 - [Detailed Architecture](#detailed-architecture)
 - [Contract Design](#contract-design)
 - [Data and State Model](#data-and-state-model)
+- [Merchant Subscription Operations](#merchant-subscription-operations)
+- [API Surface](#api-surface)
 - [Security and Trust Boundaries](#security-and-trust-boundaries)
 - [End-To-End Flow](#end-to-end-flow)
 - [Local Development](#local-development)
@@ -31,56 +29,41 @@ The project is designed as a contest-grade prototype showing end-to-end private 
 - [Roadmap](#roadmap)
 - [References](#references)
 
-## Why PayMe
+## Project Overview
 
-Recurring payments in Web3 still have three major problems:
+PayMe covers the recurring payment flow for a customer and a merchant:
 
-- poor wallet UX and key management for non-technical users
-- no native privacy for subscription balances and spending limits
-- weak merchant tooling for billing cycles and recovery workflows
+- customer wallet onboarding with passkeys
+- encrypted subscription approval and first charge
+- merchant plan creation and recurring billing execution
+- billing failure tracking and retry/recovery handling
 
-PayMe addresses these by combining:
+The current codebase is split across:
 
-- passkey-based smart account onboarding
-- account abstraction via ERC-4337 UserOperations
-- confidential on-chain amount handling through Zama fhEVM
-- merchant-side subscription control plane and recovery loops
+- `frontend` for customer and merchant routes
+- `hardhat` for smart contracts and deployment
+- `docs` for network and operational notes
+- `frontend/src/lib/fhevm-sdk` for the fhEVM integration layer
 
-## Project Evolution
+## Implementation Status
 
-This repository evolved in three concrete implementation steps:
-
-1. Wallet and confidentiality foundation.
-   Added passkey-enabled wallet UX, ERC-4337 execution path, and encrypted balance primitives.
-2. Merchant subscription product layer.
-   Added plan registry, embedded checkout, customer approval flow, and renewal charge path.
-3. Operational merchant workflows.
-   Added billing cycle execution, failure handling, and recovery queue to make recurring payments practical.
-
-Current state in this repo:
+Current implementation status in this repository:
 
 - customer approval and merchant renewal flows are implemented
-- checkout and merchant surfaces are integrated in the same app
-- merchant operational state is currently prototype metadata (local storage)
-- architecture is Sepolia-first with documented mainnet migration path
+- merchant plan, billing, and recovery screens exist in the frontend
+- the embedded checkout route is implemented
+- the merchant control plane is still prototype metadata
+- Sepolia is the current active network target
 
-## What We Built
+## System Scope
 
-- confidential wallet and card UX for customers
-- merchant portal for plans, subscriptions, billing cycles, and recovery
-- embedded checkout for subscription approval and first charge
-- encrypted subscription allowance model with on-chain enforcement
-- CardFactory + PrivateCard + SubscriptionPlanRegistry contract suite
-- relayer-assisted user decryption and encrypted input workflows
+This repository includes:
 
-## What This Project Includes
-
-- Passkey-secured smart account onboarding
-- Private card contracts per user (`PrivateCard`)
-- Encrypted recurring subscription approvals
-- Merchant billing cycles, retry flows, and recovery queue
-- On-chain plan registry plus local merchant control plane metadata
-- Embedded checkout flow for customer subscription approval
+- passkey-secured smart account onboarding
+- `PrivateCard` deployment and subscription approval flow
+- merchant plan registration and billing cycle execution
+- encrypted input handling through the relayer SDK
+- local merchant metadata for agreements, attempts, and recovery
 
 ## Core Technologies
 
@@ -106,6 +89,23 @@ Primary implementation surfaces:
 - `frontend/src/app/api/fhe/sign-user-decrypt/route.ts` - decryption signature route
 - `hardhat/contracts` - protocol contracts
 - `hardhat/deploy` and `hardhat/scripts` - deployment and wiring scripts
+
+## Personas and Use Cases
+
+Primary personas:
+
+- customer who wants private wallet balances and private subscription approvals
+- merchant who needs recurring billing and retry/recovery operations
+- protocol operator/developer who needs deterministic contract and deployment behavior
+
+Main use cases supported in this repo:
+
+1. customer creates passkey-linked smart account and private card
+2. merchant creates plan and shares checkout reference
+3. customer approves encrypted subscription and executes first payment
+4. merchant runs renewal charges for due subscriptions
+5. merchant reviews failures and retries at-risk agreements
+6. customer and merchant inspect activity and balances with privacy-preserving flows
 
 ## System Components
 
@@ -311,6 +311,49 @@ Control plane state (prototype):
 - billing attempts
 - retry and recovery indicators
 - activity timeline items
+
+## Merchant Subscription Operations
+
+Operational model implemented in this prototype:
+
+1. Plan management.
+   Merchant creates/updates plan template and plan references used by checkout.
+2. Agreement registration.
+   After customer approval, merchant-side metadata stores agreement and cycle baseline.
+3. Billing execution.
+   Merchant billing views compute due agreements and submit renewal execution.
+4. Attempt recording.
+   Success/failure is tracked per cycle with attempt-level records.
+5. Recovery workflow.
+   Failed agreements move to recovery queue for retry according to policy.
+6. State visibility.
+   Merchant dashboard surfaces active, past-due, and recovery-at-risk indicators.
+
+Why this matters:
+
+- gives a Stripe-like operational mental model for subscriptions
+- keeps confidential payment authorization on-chain
+- preserves merchant-grade observability even in prototype mode
+
+## API Surface
+
+Application API routes currently used in core flow:
+
+- [`/api/fhe/sign-user-decrypt`](/home/zoe/Documents/zama/PayMe/frontend/src/app/api/fhe/sign-user-decrypt/route.ts)
+  - returns signer address and signs typed-data payloads for user decrypt requests
+- [`/api/users/save`](/home/zoe/Documents/zama/PayMe/frontend/src/app/api/users/save/route.ts)
+  - persists user-linked account metadata path used by app workflows
+- [`/api/users/topup`](/home/zoe/Documents/zama/PayMe/frontend/src/app/api/users/topup/route.ts)
+  - utility path for test/development funding operations
+- [`/api/debug/deploy`](/home/zoe/Documents/zama/PayMe/frontend/src/app/api/debug/deploy/route.ts)
+  - debug visibility into deployment/environment wiring status
+
+Core client integration points:
+
+- [`frontend/src/app/embed/checkout/page.tsx`](/home/zoe/Documents/zama/PayMe/frontend/src/app/embed/checkout/page.tsx)
+- [`frontend/src/lib/fhevm-sdk/internal/fhevm.ts`](/home/zoe/Documents/zama/PayMe/frontend/src/lib/fhevm-sdk/internal/fhevm.ts)
+- [`frontend/src/lib/fhevm-sdk/react/useFHEEncryption.ts`](/home/zoe/Documents/zama/PayMe/frontend/src/lib/fhevm-sdk/react/useFHEEncryption.ts)
+- [`frontend/src/lib/merchant/control-plane-store.ts`](/home/zoe/Documents/zama/PayMe/frontend/src/lib/merchant/control-plane-store.ts)
 
 ## Security and Trust Boundaries
 
