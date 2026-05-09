@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./frontend/public/assets/payme-n.svg" alt="PayMe Logo" width="200"/>
+  <img src="./frontend/public/assets/payme-n.svg" alt="PayMe Logo" width="400"/>
 </p>
 
 # PayMe
