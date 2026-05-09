@@ -18,7 +18,7 @@ The project is designed as a contest-grade prototype showing end-to-end private 
 - [Core Technologies](#core-technologies)
 - [Repository Structure](#repository-structure)
 - [Architecture At A Glance](#architecture-at-a-glance)
-- [System Lifecycle](#system-lifecycle)
+- [Protocol Journey](#protocol-journey)
 - [Component Interaction View](#component-interaction-view)
 - [Detailed Architecture](#detailed-architecture)
 - [Contract Design](#contract-design)
@@ -121,55 +121,75 @@ Operational Layer:
 
 ## Architecture At A Glance
 
-```text
-┌──────────────────────────────┐      ┌──────────────────────────────┐      ┌──────────────────────────────┐
-│      Customer Devices        │      │      Merchant Operators      │      │      Off-chain Services      │
-│  - Passkey/WebAuthn auth     │      │  - Plans + Billing UI        │      │  - Bundler / Paymaster       │
-│  - Wallet + Checkout flows   │      │  - Recovery + Retry actions  │      │  - Relayer API               │
-└───────────────┬──────────────┘      └───────────────┬──────────────┘      └───────────────┬──────────────┘
-                │                                     │                                     │
-                └──────────────────┬──────────────────┴──────────────────┬──────────────────┘
-                                   │                                     │
-                      ┌────────────▼─────────────────────────────────────▼────────────┐
-                      │                     PayMe Frontend (Next.js)                   │
-                      │  - Customer dashboard / Merchant dashboard                     │
-                      │  - /embed/checkout                                             │
-                      │  - FHE hooks and encryption builder                            │
-                      │  - API: /api/fhe/sign-user-decrypt                             │
-                      └────────────┬─────────────────────────────────────┬────────────┘
-                                   │                                     │
-                        ERC-4337 UserOps                         FHE SDK/Relay calls
-                                   │                                     │
-                      ┌────────────▼─────────────┐             ┌─────────▼────────────────┐
-                      │  ERC-4337 AA Runtime     │             │   Zama FHE/Gateway Plane │
-                      │  - Smart Account         │             │   - Relayer SDK          │
-                      │  - EntryPoint            │             │   - Gateway Chain        │
-                      │  - Bundler               │             │   - KMS + ACL Verifiers  │
-                      └────────────┬─────────────┘             └─────────┬────────────────┘
-                                   │                                     │
-                                   └──────────────────┬──────────────────┘
-                                                      │
-                                       ┌──────────────▼──────────────────────┐
-                                       │     Host Chain Contracts (Sepolia)  │
-                                       │  - CardFactory.sol                  │
-                                       │  - PrivateCard.sol                  │
-                                       │  - SubscriptionPlanRegistry.sol     │
-                                       │  - Confidential token flow          │
-                                       └──────────────┬──────────────────────┘
-                                                      │
-                                       ┌──────────────▼──────────────────────┐
-                                       │ Merchant Control Plane (Prototype)  │
-                                       │ - plans / agreements / cycles       │
-                                       │ - attempts / retries / recovery     │
-                                       │ - current storage: local metadata   │
-                                       └─────────────────────────────────────┘
+```mermaid
+%%{init: {'theme':'dark', 'themeVariables': { 'primaryColor':'#22d3ee', 'primaryTextColor':'#ffffff', 'primaryBorderColor':'#06b6d4', 'lineColor':'#67e8f9', 'secondaryColor':'#111827', 'tertiaryColor':'#1f2937', 'background':'#0b1220', 'mainBkg':'#111827', 'secondBkg':'#1f2937', 'labelBackground':'#1f2937', 'labelTextColor':'#ffffff'}}}%%
+flowchart TB
+    subgraph ACTORS["Actors"]
+      C["Customer Devices<br/>Passkey/WebAuthn<br/>Wallet + Checkout"]
+      M["Merchant Operators<br/>Plans + Billing + Recovery"]
+    end
+
+    subgraph APP["PayMe Application Layer (Next.js)"]
+      FE["Customer Dashboard + Merchant Dashboard"]
+      EMB["/embed/checkout"]
+      API["/api/fhe/sign-user-decrypt"]
+      FHEH["FHE Hooks + Encryption Builder"]
+    end
+
+    subgraph EXEC["Execution Layer (ERC-4337)"]
+      B["Bundler"]
+      EP["EntryPoint"]
+      SA["Smart Account"]
+      PM["Paymaster (optional)"]
+    end
+
+    subgraph FHE["Confidential Compute Layer (Zama)"]
+      SDK["Relayer SDK"]
+      REL["Relayer API (/v2)"]
+      GW["Gateway Chain"]
+      KMS["KMS + ACL Verifiers"]
+    end
+
+    subgraph CHAIN["Contract Layer (Host Chain)"]
+      CF["CardFactory.sol"]
+      PC["PrivateCard.sol"]
+      SPR["SubscriptionPlanRegistry.sol"]
+      TOK["Confidential Token Flow"]
+    end
+
+    subgraph OPS["Merchant Control Plane (Prototype Metadata)"]
+      MCP["plans + agreements + cycles<br/>attempts + retry + recovery"]
+    end
+
+    C --> FE
+    M --> FE
+    FE --> EMB
+    FE --> API
+    EMB --> FHEH
+    FHEH --> SDK
+    SDK --> REL
+    REL --> GW
+    GW --> KMS
+
+    FE --> B
+    PM --> EP
+    B --> EP
+    EP --> SA
+    SA --> CF
+    SA --> PC
+    SA --> SPR
+    PC --> TOK
+
+    FE --> MCP
+    PC -. billing events .-> MCP
+    SPR -. plan refs .-> EMB
 ```
 
 - Privacy boundary: plaintext amounts stay client-side; encrypted handles/proofs are used for execution.
 - Authorization boundary: customer approves subscription mandate once; renewal execution follows contract rules.
 - Settlement boundary: ERC-4337 handles transaction orchestration; FHE/Gateway handles encrypted compute lifecycle.
 
-## System Lifecycle
+## Protocol Journey
 
 ```mermaid
 %%{init: {'theme':'dark', 'themeVariables': { 'primaryColor':'#0ea5e9', 'primaryTextColor':'#ffffff', 'primaryBorderColor':'#0284c7', 'lineColor':'#38bdf8', 'secondaryColor':'#1e293b', 'tertiaryColor':'#334155', 'background':'#0b1220', 'mainBkg':'#111827', 'secondBkg':'#1f2937', 'labelBackground':'#1f2937', 'labelTextColor':'#ffffff', 'actorBkg':'#111827', 'actorBorder':'#0ea5e9', 'actorTextColor':'#ffffff', 'signalColor':'#38bdf8', 'signalTextColor':'#ffffff'}}}%%
@@ -182,7 +202,7 @@ sequenceDiagram
     participant CP as Merchant Control Plane
 
     rect rgb(20,40,70)
-        Note over User,Card: PHASE 1 · Onboarding and Card Bootstrapping
+        Note over User,Card: STAGE 1 · Onboarding and Card Bootstrapping
         User->>UI: Register/Login with passkey
         UI->>AA: Deploy/initialize smart account (if needed)
         UI->>Card: Create card via CardFactory
@@ -190,7 +210,7 @@ sequenceDiagram
     end
 
     rect rgb(20,70,45)
-        Note over User,Card: PHASE 2 · Subscription Approval and First Charge
+        Note over User,Card: STAGE 2 · Subscription Approval and First Charge
         User->>UI: Start checkout from merchant link
         UI->>SDK: Encrypt allowance/amount
         SDK-->>UI: handles + inputProof
@@ -200,7 +220,7 @@ sequenceDiagram
     end
 
     rect rgb(70,45,20)
-        Note over UI,CP: PHASE 3 · Billing Cycles, Retry, Recovery
+        Note over UI,CP: STAGE 3 · Billing Cycles, Retry, Recovery
         UI->>CP: compute due subscriptions and retry queue
         UI->>AA: submit renewal UserOperation(s)
         AA->>Card: renewal pull against approved refs
@@ -215,8 +235,8 @@ sequenceDiagram
 flowchart LR
     U[Customer] --> FE[Frontend App]
     M[Merchant] --> FE
-    FE --> EMB[/embed/checkout]
-    FE --> API[/api/fhe/sign-user-decrypt]
+    FE --> EMB["/embed/checkout"]
+    FE --> API["/api/fhe/sign-user-decrypt"]
     EMB --> SDK[Relayer SDK]
     SDK --> REL[Relayer API]
     REL --> GW[Gateway]
