@@ -1,4 +1,6 @@
-<img src="./frontend/public/assets/payme.svg" alt="PayMe Logo" width="200"/>
+<p align="center">
+  <img src="./frontend/public/assets/payme-n.svg" alt="PayMe Logo" width="200"/>
+</p>
 
 # PayMe
 
