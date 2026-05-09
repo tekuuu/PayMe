@@ -16,6 +16,30 @@ import {
 } from '@/lib/merchant/control-plane-store';
 import type { MerchantControlPlaneState, RecoveryPolicy } from '@/lib/merchant/types';
 
+async function fetchMerchantState(address: string): Promise<MerchantControlPlaneState | null> {
+  try {
+    const res = await fetch(`/api/merchant/${address}/state`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.error) return null;
+    return {
+      version: 2,
+      merchantAddress: address,
+      plans: data.plans || [],
+      subscriptions: data.subscriptions || [],
+      cycles: data.cycles || [],
+      attempts: data.attempts || [],
+      settlements: [],
+      events: [],
+      recoveryPolicy: { maxAttempts: 5, retryWindowsMinutes: [10, 60, 360, 1440, 4320], terminalStatusOnExhausted: 'past_due' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function useMerchantControlPlane(merchantAddress?: string) {
   const [state, setState] = useState<MerchantControlPlaneState | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -27,9 +51,16 @@ export function useMerchantControlPlane(merchantAddress?: string) {
     return merchantAddress;
   }, [merchantAddress]);
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback(async () => {
     if (!normalizedMerchantAddress) {
       setState(null);
+      setIsHydrated(true);
+      return;
+    }
+
+    const apiState = await fetchMerchantState(normalizedMerchantAddress);
+    if (apiState) {
+      setState(apiState);
       setIsHydrated(true);
       return;
     }

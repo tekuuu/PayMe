@@ -25,6 +25,33 @@ const CUSTOMER_CARD_INDEX_PREFIX = 'payme.customer.cardSubscriptions.';
 const CUSTOMER_ACTIVITY_PREFIX = 'payme.customer.activity.';
 export const MERCHANT_CONTROL_PLANE_EVENT = 'payme:merchant-control-plane-updated';
 
+async function syncMerchantStateToApi(merchantAddress: string, state: MerchantControlPlaneState) {
+  try {
+    const res = await fetch(`/api/merchant/${merchantAddress}/state`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        plans: state.plans,
+        subscriptions: state.subscriptions,
+        cycles: state.cycles,
+        attempts: state.attempts,
+      }),
+    });
+    if (!res.ok) throw new Error('API sync failed');
+  } catch {}
+}
+
+async function syncActivityToApi(walletAddress: string, activity: CustomerActivity) {
+  try {
+    const res = await fetch(`/api/customer/${walletAddress}/activities`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(activity),
+    });
+    if (!res.ok) throw new Error('API sync failed');
+  } catch {}
+}
+
 type PartialRecoveryPolicy = Partial<RecoveryPolicy>;
 
 export type BeginBillingAttemptInput = {
@@ -201,6 +228,8 @@ export function addConfirmedActivity(
   const trimmed = activities.slice(0, 100);
   window.localStorage.setItem(key, JSON.stringify(trimmed));
   console.log('[addConfirmedActivity] Saved confirmed activity:', newActivity.type, 'Total activities:', trimmed.length);
+
+  try { syncActivityToApi(addrLower, newActivity); } catch {}
 }
 
 export function confirmCustomerActivity(
@@ -873,16 +902,20 @@ export function readMerchantState(merchantAddress: string) {
 
 export function writeMerchantState(merchantAddress: string, state: MerchantControlPlaneState) {
   const normalizedMerchant = normalizeAddress(merchantAddress);
-  if (typeof window === 'undefined') {
-    return;
-  }
-
   const payload: MerchantControlPlaneState = {
     ...state,
     version: STATE_VERSION,
     merchantAddress: normalizedMerchant,
     updatedAt: nowIso(),
   };
+
+  try {
+    syncMerchantStateToApi(normalizedMerchant, payload);
+  } catch {}
+
+  if (typeof window === 'undefined') {
+    return;
+  }
 
   window.localStorage.setItem(storageKey(normalizedMerchant), JSON.stringify(payload));
   window.dispatchEvent(

@@ -69,14 +69,14 @@ export default function SubscribeCheckoutPage() {
 
   const { me } = useMe();
   const { instance, status: fheStatus, refresh: refreshFhe, error: fheError } = useFhevmContext();
-  const { selectedCardAddress: autoCardAddress, hasCard, isCreating, createCard, attachCardByAddress, resolveCard } = usePrivateCard(me || null);
+  const { hasCard, isCreating, createCard, attachCardByAddress, resolveCard } = usePrivateCard(me || null);
   const builder = useMemo(() => new UserOpBuilder(CHAIN), []);
 
   const [inputCardAddress, setInputCardAddress] = useState('');
   const [isResolvingCard, setIsResolvingCard] = useState(false);
   const [manualCardAddress, setManualCardAddress] = useState<Hex | null>(null);
 
-  const cardAddress = manualCardAddress || autoCardAddress;
+  const cardAddress = manualCardAddress;
 
   const [maxAllowance, setMaxAllowance] = useState('');
   const [isApproving, setIsApproving] = useState(false);
