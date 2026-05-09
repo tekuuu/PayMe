@@ -14,11 +14,12 @@ The project is designed as a contest-grade prototype showing end-to-end private 
 ## Table Of Contents
 
 - [Why PayMe](#why-payme)
+- [Project Evolution](#project-evolution)
 - [What We Built](#what-we-built)
 - [Core Technologies](#core-technologies)
 - [Repository Structure](#repository-structure)
 - [Architecture At A Glance](#architecture-at-a-glance)
-- [Protocol Journey](#protocol-journey)
+- [Protocol Flow](#protocol-flow)
 - [Component Interaction View](#component-interaction-view)
 - [Detailed Architecture](#detailed-architecture)
 - [Contract Design](#contract-design)
@@ -45,6 +46,24 @@ PayMe addresses these by combining:
 - account abstraction via ERC-4337 UserOperations
 - confidential on-chain amount handling through Zama fhEVM
 - merchant-side subscription control plane and recovery loops
+
+## Project Evolution
+
+This repository evolved in three concrete implementation steps:
+
+1. Wallet and confidentiality foundation.
+   Added passkey-enabled wallet UX, ERC-4337 execution path, and encrypted balance primitives.
+2. Merchant subscription product layer.
+   Added plan registry, embedded checkout, customer approval flow, and renewal charge path.
+3. Operational merchant workflows.
+   Added billing cycle execution, failure handling, and recovery queue to make recurring payments practical.
+
+Current state in this repo:
+
+- customer approval and merchant renewal flows are implemented
+- checkout and merchant surfaces are integrated in the same app
+- merchant operational state is currently prototype metadata (local storage)
+- architecture is Sepolia-first with documented mainnet migration path
 
 ## What We Built
 
@@ -131,6 +150,9 @@ flowchart TB
 
     subgraph APP["PayMe Application Layer (Next.js)"]
       FE["Customer Dashboard + Merchant Dashboard"]
+      MP["Merchant Plans UI"]
+      MB["Merchant Billing Cycles UI"]
+      MR["Merchant Recovery UI"]
       EMB["/embed/checkout"]
       API["/api/fhe/sign-user-decrypt"]
       FHEH["FHE Hooks + Encryption Builder"]
@@ -163,6 +185,9 @@ flowchart TB
 
     C --> FE
     M --> FE
+    M --> MP
+    M --> MB
+    M --> MR
     FE --> EMB
     FE --> API
     EMB --> FHEH
@@ -172,6 +197,9 @@ flowchart TB
     GW --> KMS
 
     FE --> B
+    MP --> B
+    MB --> B
+    MR --> B
     PM --> EP
     B --> EP
     EP --> SA
@@ -180,26 +208,43 @@ flowchart TB
     SA --> SPR
     PC --> TOK
 
+    MP --> MCP
+    MB --> MCP
+    MR --> MCP
     FE --> MCP
     PC -. billing events .-> MCP
     SPR -. plan refs .-> EMB
+    MP -. publish/update refs .-> SPR
+    MB -. renewal jobs .-> PC
+    MR -. retry jobs .-> PC
 ```
 
 - Privacy boundary: plaintext amounts stay client-side; encrypted handles/proofs are used for execution.
 - Authorization boundary: customer approves subscription mandate once; renewal execution follows contract rules.
 - Settlement boundary: ERC-4337 handles transaction orchestration; FHE/Gateway handles encrypted compute lifecycle.
 
-## Protocol Journey
+## Protocol Flow
 
 ```mermaid
 %%{init: {'theme':'dark', 'themeVariables': { 'primaryColor':'#0ea5e9', 'primaryTextColor':'#ffffff', 'primaryBorderColor':'#0284c7', 'lineColor':'#38bdf8', 'secondaryColor':'#1e293b', 'tertiaryColor':'#334155', 'background':'#0b1220', 'mainBkg':'#111827', 'secondBkg':'#1f2937', 'labelBackground':'#1f2937', 'labelTextColor':'#ffffff', 'actorBkg':'#111827', 'actorBorder':'#0ea5e9', 'actorTextColor':'#ffffff', 'signalColor':'#38bdf8', 'signalTextColor':'#ffffff'}}}%%
 sequenceDiagram
     participant User as Customer
+    participant Merchant as Merchant Operator
     participant UI as PayMe Frontend
+    participant MUI as Merchant UI
     participant SDK as Zama Relayer SDK
     participant AA as ERC-4337 (Bundler+EntryPoint)
+    participant Registry as SubscriptionPlanRegistry
     participant Card as PrivateCard
     participant CP as Merchant Control Plane
+
+    rect rgb(38,38,68)
+        Note over Merchant,Registry: STAGE 0 · Merchant Plan Setup
+        Merchant->>MUI: Create/Update plan terms
+        MUI->>AA: submit UserOperation for plan publish
+        AA->>Registry: register/update plan reference
+        Registry-->>CP: plan metadata anchor emitted
+    end
 
     rect rgb(20,40,70)
         Note over User,Card: STAGE 1 · Onboarding and Card Bootstrapping
@@ -211,7 +256,8 @@ sequenceDiagram
 
     rect rgb(20,70,45)
         Note over User,Card: STAGE 2 · Subscription Approval and First Charge
-        User->>UI: Start checkout from merchant link
+        Merchant->>MUI: Share checkout link with plan reference
+        User->>UI: Open checkout link
         UI->>SDK: Encrypt allowance/amount
         SDK-->>UI: handles + inputProof
         UI->>AA: submit UserOperation for subscribe + initial charge
@@ -220,11 +266,15 @@ sequenceDiagram
     end
 
     rect rgb(70,45,20)
-        Note over UI,CP: STAGE 3 · Billing Cycles, Retry, Recovery
-        UI->>CP: compute due subscriptions and retry queue
-        UI->>AA: submit renewal UserOperation(s)
+        Note over Merchant,CP: STAGE 3 · Merchant Billing, Retry, Recovery
+        Merchant->>MUI: Open billing cycles / recovery views
+        MUI->>CP: compute due subscriptions and retry queue
+        Merchant->>MUI: Trigger due charges
+        MUI->>AA: submit renewal UserOperation(s)
         AA->>Card: renewal pull against approved refs
         Card-->>CP: success/failure events and settlement info
+        Merchant->>MUI: Retry failed items
+        MUI->>AA: submit retry UserOperation(s)
     end
 ```
 
@@ -235,6 +285,9 @@ sequenceDiagram
 flowchart LR
     U[Customer] --> FE[Frontend App]
     M[Merchant] --> FE
+    M --> MPLAN[Merchant Plans]
+    M --> MBILL[Merchant Billing Cycles]
+    M --> MREC[Merchant Recovery]
     FE --> EMB["/embed/checkout"]
     FE --> API["/api/fhe/sign-user-decrypt"]
     EMB --> SDK[Relayer SDK]
@@ -243,6 +296,9 @@ flowchart LR
     GW --> KMS[KMS + Verifiers]
 
     FE --> BUNDLER[Bundler]
+    MPLAN --> BUNDLER
+    MBILL --> BUNDLER
+    MREC --> BUNDLER
     BUNDLER --> EP[EntryPoint]
     EP --> SA[Smart Account]
     SA --> CF[CardFactory]
@@ -251,6 +307,12 @@ flowchart LR
     PC --> TOKEN[Confidential Token]
 
     FE --> MCP[Merchant Control Plane Metadata]
+    MPLAN --> MCP
+    MBILL --> MCP
+    MREC --> MCP
+    MPLAN -. plan publish/update .-> SPR
+    MBILL -. renewal requests .-> PC
+    MREC -. retry requests .-> PC
     PC -. events .-> MCP
     SPR -. plan refs .-> EMB
 ```
