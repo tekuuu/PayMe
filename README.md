@@ -143,80 +143,21 @@ Operational Layer:
 ```mermaid
 %%{init: {'theme':'dark', 'themeVariables': { 'primaryColor':'#22d3ee', 'primaryTextColor':'#ffffff', 'primaryBorderColor':'#06b6d4', 'lineColor':'#67e8f9', 'secondaryColor':'#111827', 'tertiaryColor':'#1f2937', 'background':'#0b1220', 'mainBkg':'#111827', 'secondBkg':'#1f2937', 'labelBackground':'#1f2937', 'labelTextColor':'#ffffff'}}}%%
 flowchart TB
-    subgraph ACTORS["Actors"]
-      C["Customer Devices<br/>Passkey/WebAuthn<br/>Wallet + Checkout"]
-      M["Merchant Operators<br/>Plans + Billing + Recovery"]
-    end
-
-    subgraph APP["PayMe Application Layer (Next.js)"]
-      FE["Customer Dashboard + Merchant Dashboard"]
-      MP["Merchant Plans UI"]
-      MB["Merchant Billing Cycles UI"]
-      MR["Merchant Recovery UI"]
-      EMB["/embed/checkout"]
-      API["/api/fhe/sign-user-decrypt"]
-      FHEH["FHE Hooks + Encryption Builder"]
-    end
-
-    subgraph EXEC["Execution Layer (ERC-4337)"]
-      B["Bundler"]
-      EP["EntryPoint"]
-      SA["Smart Account"]
-      PM["Paymaster (optional)"]
-    end
-
-    subgraph FHE["Confidential Compute Layer (Zama)"]
-      SDK["Relayer SDK"]
-      REL["Relayer API (/v2)"]
-      GW["Gateway Chain"]
-      KMS["KMS + ACL Verifiers"]
-    end
-
-    subgraph CHAIN["Contract Layer (Host Chain)"]
-      CF["CardFactory.sol"]
-      PC["PrivateCard.sol"]
-      SPR["SubscriptionPlanRegistry.sol"]
-      TOK["Confidential Token Flow"]
-    end
-
-    subgraph OPS["Merchant Control Plane (Prototype Metadata)"]
-      MCP["plans + agreements + cycles<br/>attempts + retry + recovery"]
-    end
+    C["Customer"]
+    M["Merchant"]
+    FE["PayMe Frontend (Next.js)"]
+    AA["ERC-4337 Runtime<br/>Bundler + EntryPoint + Smart Account"]
+    CHAIN["Contracts<br/>CardFactory + PrivateCard + PlanRegistry"]
+    FHE["Zama Confidential Plane<br/>Relayer SDK + Relayer + Gateway/KMS"]
+    MCP["Merchant Control Plane Metadata"]
 
     C --> FE
     M --> FE
-    M --> MP
-    M --> MB
-    M --> MR
-    FE --> EMB
-    FE --> API
-    EMB --> FHEH
-    FHEH --> SDK
-    SDK --> REL
-    REL --> GW
-    GW --> KMS
-
-    FE --> B
-    MP --> B
-    MB --> B
-    MR --> B
-    PM --> EP
-    B --> EP
-    EP --> SA
-    SA --> CF
-    SA --> PC
-    SA --> SPR
-    PC --> TOK
-
-    MP --> MCP
-    MB --> MCP
-    MR --> MCP
+    FE --> AA
+    AA --> CHAIN
+    FE --> FHE
+    CHAIN --> MCP
     FE --> MCP
-    PC -. billing events .-> MCP
-    SPR -. plan refs .-> EMB
-    MP -. publish/update refs .-> SPR
-    MB -. renewal jobs .-> PC
-    MR -. retry jobs .-> PC
 ```
 
 - Privacy boundary: plaintext amounts stay client-side; encrypted handles/proofs are used for execution.
@@ -231,23 +172,22 @@ sequenceDiagram
     participant User as Customer
     participant Merchant as Merchant Operator
     participant UI as PayMe Frontend
-    participant MUI as Merchant UI
     participant SDK as Zama Relayer SDK
     participant AA as ERC-4337 (Bundler+EntryPoint)
     participant Registry as SubscriptionPlanRegistry
     participant Card as PrivateCard
-    participant CP as Merchant Control Plane
+    participant CP as Merchant Metadata Store
 
     rect rgb(38,38,68)
-        Note over Merchant,Registry: STAGE 0 · Merchant Plan Setup
-        Merchant->>MUI: Create/Update plan terms
-        MUI->>AA: submit UserOperation for plan publish
+        Note over Merchant,Registry: STEP 0 · Merchant creates plan
+        Merchant->>UI: Create/Update plan terms
+        UI->>AA: submit UserOperation for plan publish
         AA->>Registry: register/update plan reference
-        Registry-->>CP: plan metadata anchor emitted
+        UI->>CP: store plan metadata and status
     end
 
     rect rgb(20,40,70)
-        Note over User,Card: STAGE 1 · Onboarding and Card Bootstrapping
+        Note over User,Card: STEP 1 · Customer wallet and card setup
         User->>UI: Register/Login with passkey
         UI->>AA: Deploy/initialize smart account (if needed)
         UI->>Card: Create card via CardFactory
@@ -255,26 +195,26 @@ sequenceDiagram
     end
 
     rect rgb(20,70,45)
-        Note over User,Card: STAGE 2 · Subscription Approval and First Charge
-        Merchant->>MUI: Share checkout link with plan reference
+        Note over User,Card: STEP 2 · Subscription approval and first charge
+        Merchant->>UI: Share checkout link with plan reference
         User->>UI: Open checkout link
         UI->>SDK: Encrypt allowance/amount
         SDK-->>UI: handles + inputProof
         UI->>AA: submit UserOperation for subscribe + initial charge
         AA->>Card: execute card subscription call
-        Card-->>CP: emit refs/metadata for merchant tracking
+        UI->>CP: register agreement and cycle metadata
     end
 
     rect rgb(70,45,20)
-        Note over Merchant,CP: STAGE 3 · Merchant Billing, Retry, Recovery
-        Merchant->>MUI: Open billing cycles / recovery views
-        MUI->>CP: compute due subscriptions and retry queue
-        Merchant->>MUI: Trigger due charges
-        MUI->>AA: submit renewal UserOperation(s)
+        Note over Merchant,CP: STEP 3 · Merchant billing and recovery
+        Merchant->>UI: Open billing/recovery view
+        UI->>CP: compute due subscriptions and retry queue
+        Merchant->>UI: Trigger due charges
+        UI->>AA: submit renewal UserOperation(s)
         AA->>Card: renewal pull against approved refs
-        Card-->>CP: success/failure events and settlement info
-        Merchant->>MUI: Retry failed items
-        MUI->>AA: submit retry UserOperation(s)
+        UI->>CP: save success/failure attempts
+        Merchant->>UI: Retry failed items
+        UI->>AA: submit retry UserOperation(s)
     end
 ```
 
@@ -282,39 +222,35 @@ sequenceDiagram
 
 ```mermaid
 %%{init: {'theme':'dark', 'themeVariables': { 'primaryColor':'#a78bfa', 'primaryTextColor':'#ffffff', 'primaryBorderColor':'#8b5cf6', 'lineColor':'#a78bfa', 'secondaryColor':'#0f172a', 'tertiaryColor':'#1e293b', 'background':'#0b1020', 'mainBkg':'#111827', 'secondBkg':'#1f2937', 'labelBackground':'#1f2937', 'labelTextColor':'#ffffff'}}}%%
-flowchart LR
-    U[Customer] --> FE[Frontend App]
-    M[Merchant] --> FE
-    M --> MPLAN[Merchant Plans]
-    M --> MBILL[Merchant Billing Cycles]
-    M --> MREC[Merchant Recovery]
-    FE --> EMB["/embed/checkout"]
-    FE --> API["/api/fhe/sign-user-decrypt"]
-    EMB --> SDK[Relayer SDK]
-    SDK --> REL[Relayer API]
-    REL --> GW[Gateway]
-    GW --> KMS[KMS + Verifiers]
+flowchart TB
+    subgraph MERCHANT["Merchant Actions"]
+      MPLAN["Create/Update Plans"]
+      MBILL["Run Billing Cycles"]
+      MREC["Run Recovery Retries"]
+    end
 
-    FE --> BUNDLER[Bundler]
-    MPLAN --> BUNDLER
-    MBILL --> BUNDLER
-    MREC --> BUNDLER
-    BUNDLER --> EP[EntryPoint]
-    EP --> SA[Smart Account]
-    SA --> CF[CardFactory]
-    SA --> PC[PrivateCard]
-    SA --> SPR[SubscriptionPlanRegistry]
-    PC --> TOKEN[Confidential Token]
+    subgraph CUSTOMER["Customer Actions"]
+      CSET["Wallet/Card Setup"]
+      CSUB["Checkout + Subscribe"]
+    end
 
-    FE --> MCP[Merchant Control Plane Metadata]
+    subgraph ONCHAIN["On-chain Targets"]
+      SPR["SubscriptionPlanRegistry"]
+      PC["PrivateCard"]
+      CF["CardFactory"]
+    end
+
+    MCP["Merchant Metadata Store"]
+
+    CSET --> CF
+    CSUB --> PC
+    MPLAN --> SPR
+    MBILL --> PC
+    MREC --> PC
     MPLAN --> MCP
     MBILL --> MCP
     MREC --> MCP
-    MPLAN -. plan publish/update .-> SPR
-    MBILL -. renewal requests .-> PC
-    MREC -. retry requests .-> PC
-    PC -. events .-> MCP
-    SPR -. plan refs .-> EMB
+    CSUB --> MCP
 ```
 
 ## Detailed Architecture
