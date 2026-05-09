@@ -18,7 +18,6 @@ The project is designed as a contest-grade prototype showing end-to-end private 
 - [What We Built](#what-we-built)
 - [Core Technologies](#core-technologies)
 - [Repository Structure](#repository-structure)
-- [Architecture At A Glance](#architecture-at-a-glance)
 - [Protocol Flow](#protocol-flow)
 - [Component Interaction View](#component-interaction-view)
 - [Detailed Architecture](#detailed-architecture)
@@ -137,32 +136,6 @@ Operational Layer:
 - optional paymaster model for sponsored gas path
 - deployment scripts for contract address propagation
 - environment-configured chain, relayer, and contract endpoints
-
-## Architecture At A Glance
-
-```mermaid
-%%{init: {'theme':'dark', 'themeVariables': { 'primaryColor':'#22d3ee', 'primaryTextColor':'#ffffff', 'primaryBorderColor':'#06b6d4', 'lineColor':'#67e8f9', 'secondaryColor':'#111827', 'tertiaryColor':'#1f2937', 'background':'#0b1220', 'mainBkg':'#111827', 'secondBkg':'#1f2937', 'labelBackground':'#1f2937', 'labelTextColor':'#ffffff'}}}%%
-flowchart TB
-    C["Customer"]
-    M["Merchant"]
-    FE["PayMe Frontend (Next.js)"]
-    AA["ERC-4337 Runtime<br/>Bundler + EntryPoint + Smart Account"]
-    CHAIN["Contracts<br/>CardFactory + PrivateCard + PlanRegistry"]
-    FHE["Zama Confidential Plane<br/>Relayer SDK + Relayer + Gateway/KMS"]
-    MCP["Merchant Control Plane Metadata"]
-
-    C --> FE
-    M --> FE
-    FE --> AA
-    AA --> CHAIN
-    FE --> FHE
-    CHAIN --> MCP
-    FE --> MCP
-```
-
-- Privacy boundary: plaintext amounts stay client-side; encrypted handles/proofs are used for execution.
-- Authorization boundary: customer approves subscription mandate once; renewal execution follows contract rules.
-- Settlement boundary: ERC-4337 handles transaction orchestration; FHE/Gateway handles encrypted compute lifecycle.
 
 ## Protocol Flow
 
