@@ -11,6 +11,50 @@ PayMe is a confidential subscription and payments protocol built with:
 
 The project is designed as a contest-grade prototype showing end-to-end private recurring payments, from user onboarding to merchant billing and recovery.
 
+## Table Of Contents
+
+- [Why PayMe](#why-payme)
+- [What We Built](#what-we-built)
+- [Core Technologies](#core-technologies)
+- [Repository Structure](#repository-structure)
+- [Architecture At A Glance](#architecture-at-a-glance)
+- [System Lifecycle](#system-lifecycle)
+- [Component Interaction View](#component-interaction-view)
+- [Detailed Architecture](#detailed-architecture)
+- [Contract Design](#contract-design)
+- [Data and State Model](#data-and-state-model)
+- [Security and Trust Boundaries](#security-and-trust-boundaries)
+- [End-To-End Flow](#end-to-end-flow)
+- [Local Development](#local-development)
+- [Mainnet Readiness Notes](#mainnet-readiness-notes)
+- [Known Prototype Limits](#known-prototype-limits)
+- [Roadmap](#roadmap)
+- [References](#references)
+
+## Why PayMe
+
+Recurring payments in Web3 still have three major problems:
+
+- poor wallet UX and key management for non-technical users
+- no native privacy for subscription balances and spending limits
+- weak merchant tooling for billing cycles and recovery workflows
+
+PayMe addresses these by combining:
+
+- passkey-based smart account onboarding
+- account abstraction via ERC-4337 UserOperations
+- confidential on-chain amount handling through Zama fhEVM
+- merchant-side subscription control plane and recovery loops
+
+## What We Built
+
+- confidential wallet and card UX for customers
+- merchant portal for plans, subscriptions, billing cycles, and recovery
+- embedded checkout for subscription approval and first charge
+- encrypted subscription allowance model with on-chain enforcement
+- CardFactory + PrivateCard + SubscriptionPlanRegistry contract suite
+- relayer-assisted user decryption and encrypted input workflows
+
 ## What This Project Includes
 
 - Passkey-secured smart account onboarding
@@ -37,6 +81,14 @@ The project is designed as a contest-grade prototype showing end-to-end private 
 - [docs/smart-wallet-funding-flows.md](/home/zoe/Documents/zama/PayMe/docs/smart-wallet-funding-flows.md) - wallet funding flows
 - [docs/database-plan.md](/home/zoe/Documents/zama/PayMe/docs/database-plan.md) - production data direction
 
+Primary implementation surfaces:
+
+- `frontend/src/app` - customer + merchant route surfaces
+- `frontend/src/lib/fhevm-sdk` - fhEVM integration wrapper and hooks
+- `frontend/src/app/api/fhe/sign-user-decrypt/route.ts` - decryption signature route
+- `hardhat/contracts` - protocol contracts
+- `hardhat/deploy` and `hardhat/scripts` - deployment and wiring scripts
+
 ## System Components
 
 Frontend and App Layer:
@@ -60,86 +112,240 @@ FHE / Relayer Layer:
 - User decrypt signature helper route
 - Gateway/KMS relay path for decrypt and verification flows
 
-## Full Architecture Graph
+Operational Layer:
+
+- bundler submits ERC-4337 UserOperations
+- optional paymaster model for sponsored gas path
+- deployment scripts for contract address propagation
+- environment-configured chain, relayer, and contract endpoints
+
+## Architecture At A Glance
+
+```text
+┌──────────────────────────────┐      ┌──────────────────────────────┐      ┌──────────────────────────────┐
+│      Customer Devices        │      │      Merchant Operators      │      │      Off-chain Services      │
+│  - Passkey/WebAuthn auth     │      │  - Plans + Billing UI        │      │  - Bundler / Paymaster       │
+│  - Wallet + Checkout flows   │      │  - Recovery + Retry actions  │      │  - Relayer API               │
+└───────────────┬──────────────┘      └───────────────┬──────────────┘      └───────────────┬──────────────┘
+                │                                     │                                     │
+                └──────────────────┬──────────────────┴──────────────────┬──────────────────┘
+                                   │                                     │
+                      ┌────────────▼─────────────────────────────────────▼────────────┐
+                      │                     PayMe Frontend (Next.js)                   │
+                      │  - Customer dashboard / Merchant dashboard                     │
+                      │  - /embed/checkout                                             │
+                      │  - FHE hooks and encryption builder                            │
+                      │  - API: /api/fhe/sign-user-decrypt                             │
+                      └────────────┬─────────────────────────────────────┬────────────┘
+                                   │                                     │
+                        ERC-4337 UserOps                         FHE SDK/Relay calls
+                                   │                                     │
+                      ┌────────────▼─────────────┐             ┌─────────▼────────────────┐
+                      │  ERC-4337 AA Runtime     │             │   Zama FHE/Gateway Plane │
+                      │  - Smart Account         │             │   - Relayer SDK          │
+                      │  - EntryPoint            │             │   - Gateway Chain        │
+                      │  - Bundler               │             │   - KMS + ACL Verifiers  │
+                      └────────────┬─────────────┘             └─────────┬────────────────┘
+                                   │                                     │
+                                   └──────────────────┬──────────────────┘
+                                                      │
+                                       ┌──────────────▼──────────────────────┐
+                                       │     Host Chain Contracts (Sepolia)  │
+                                       │  - CardFactory.sol                  │
+                                       │  - PrivateCard.sol                  │
+                                       │  - SubscriptionPlanRegistry.sol     │
+                                       │  - Confidential token flow          │
+                                       └──────────────┬──────────────────────┘
+                                                      │
+                                       ┌──────────────▼──────────────────────┐
+                                       │ Merchant Control Plane (Prototype)  │
+                                       │ - plans / agreements / cycles       │
+                                       │ - attempts / retries / recovery     │
+                                       │ - current storage: local metadata   │
+                                       └─────────────────────────────────────┘
+```
+
+- Privacy boundary: plaintext amounts stay client-side; encrypted handles/proofs are used for execution.
+- Authorization boundary: customer approves subscription mandate once; renewal execution follows contract rules.
+- Settlement boundary: ERC-4337 handles transaction orchestration; FHE/Gateway handles encrypted compute lifecycle.
+
+## System Lifecycle
 
 ```mermaid
-flowchart TB
-  subgraph U["Users & Merchants"]
-    C["Customer"]
-    M["Merchant Operator"]
-  end
+%%{init: {'theme':'dark', 'themeVariables': { 'primaryColor':'#0ea5e9', 'primaryTextColor':'#ffffff', 'primaryBorderColor':'#0284c7', 'lineColor':'#38bdf8', 'secondaryColor':'#1e293b', 'tertiaryColor':'#334155', 'background':'#0b1220', 'mainBkg':'#111827', 'secondBkg':'#1f2937', 'labelBackground':'#1f2937', 'labelTextColor':'#ffffff', 'actorBkg':'#111827', 'actorBorder':'#0ea5e9', 'actorTextColor':'#ffffff', 'signalColor':'#38bdf8', 'signalTextColor':'#ffffff'}}}%%
+sequenceDiagram
+    participant User as Customer
+    participant UI as PayMe Frontend
+    participant SDK as Zama Relayer SDK
+    participant AA as ERC-4337 (Bundler+EntryPoint)
+    participant Card as PrivateCard
+    participant CP as Merchant Control Plane
 
-  subgraph FE["PayMe Frontend (Next.js)"]
-    UI1["Customer Dashboard"]
-    UI2["Merchant Dashboard"]
-    EMB["/embed/checkout"]
-    AUTH["Auth Provider + Passkey/WebAuthn"]
-    FHEHOOK["FHE Hooks + Encryption Builder"]
-    API1["API: /api/fhe/sign-user-decrypt"]
-  end
+    rect rgb(20,40,70)
+        Note over User,Card: PHASE 1 · Onboarding and Card Bootstrapping
+        User->>UI: Register/Login with passkey
+        UI->>AA: Deploy/initialize smart account (if needed)
+        UI->>Card: Create card via CardFactory
+        Card-->>UI: cardAddress + ownership context
+    end
 
-  subgraph AA["ERC-4337 Account Abstraction"]
-    SA["Smart Account"]
-    BUNDLER["Bundler"]
-    EP["EntryPoint"]
-    PM["Paymaster (optional)"]
-  end
+    rect rgb(20,70,45)
+        Note over User,Card: PHASE 2 · Subscription Approval and First Charge
+        User->>UI: Start checkout from merchant link
+        UI->>SDK: Encrypt allowance/amount
+        SDK-->>UI: handles + inputProof
+        UI->>AA: submit UserOperation for subscribe + initial charge
+        AA->>Card: execute card subscription call
+        Card-->>CP: emit refs/metadata for merchant tracking
+    end
 
-  subgraph CHAIN["Host Chain (Sepolia today, Mainnet-ready model)"]
-    FACT["CardFactory.sol"]
-    CARD["PrivateCard.sol"]
-    REG["SubscriptionPlanRegistry.sol"]
-    TOKEN["Confidential Token (cUSDC-style)"]
-  end
-
-  subgraph FHE["Zama fhEVM + Gateway Stack"]
-    SDK["Relayer SDK"]
-    REL["Relayer API (/v2)"]
-    GW["Gateway Chain"]
-    KMS["KMS / Verifier Contracts"]
-    ACL["ACL / Input Verification"]
-  end
-
-  subgraph DATA["Merchant Control Plane (prototype)"]
-    LS["Local Store: plans, agreements, cycles, attempts, recovery"]
-  end
-
-  C --> UI1
-  M --> UI2
-
-  UI1 --> AUTH
-  UI2 --> AUTH
-  AUTH --> SA
-
-  UI1 --> EMB
-  EMB --> FHEHOOK
-  FHEHOOK --> SDK
-  SDK --> REL
-  REL --> GW
-  GW --> KMS
-  KMS --> ACL
-
-  UI1 --> API1
-  API1 --> REL
-
-  UI1 --> BUNDLER
-  UI2 --> BUNDLER
-  BUNDLER --> EP
-  PM --> EP
-  EP --> SA
-  SA --> FACT
-  SA --> CARD
-  SA --> REG
-  CARD --> TOKEN
-
-  UI2 --> LS
-  LS --> UI2
-
-  REG -. Plan references .-> EMB
-  EMB --> CARD
-  CARD -. Encrypted approvals .-> LS
-  CARD -. Renewal events .-> LS
+    rect rgb(70,45,20)
+        Note over UI,CP: PHASE 3 · Billing Cycles, Retry, Recovery
+        UI->>CP: compute due subscriptions and retry queue
+        UI->>AA: submit renewal UserOperation(s)
+        AA->>Card: renewal pull against approved refs
+        Card-->>CP: success/failure events and settlement info
+    end
 ```
+
+## Component Interaction View
+
+```mermaid
+%%{init: {'theme':'dark', 'themeVariables': { 'primaryColor':'#a78bfa', 'primaryTextColor':'#ffffff', 'primaryBorderColor':'#8b5cf6', 'lineColor':'#a78bfa', 'secondaryColor':'#0f172a', 'tertiaryColor':'#1e293b', 'background':'#0b1020', 'mainBkg':'#111827', 'secondBkg':'#1f2937', 'labelBackground':'#1f2937', 'labelTextColor':'#ffffff'}}}%%
+flowchart LR
+    U[Customer] --> FE[Frontend App]
+    M[Merchant] --> FE
+    FE --> EMB[/embed/checkout]
+    FE --> API[/api/fhe/sign-user-decrypt]
+    EMB --> SDK[Relayer SDK]
+    SDK --> REL[Relayer API]
+    REL --> GW[Gateway]
+    GW --> KMS[KMS + Verifiers]
+
+    FE --> BUNDLER[Bundler]
+    BUNDLER --> EP[EntryPoint]
+    EP --> SA[Smart Account]
+    SA --> CF[CardFactory]
+    SA --> PC[PrivateCard]
+    SA --> SPR[SubscriptionPlanRegistry]
+    PC --> TOKEN[Confidential Token]
+
+    FE --> MCP[Merchant Control Plane Metadata]
+    PC -. events .-> MCP
+    SPR -. plan refs .-> EMB
+```
+
+## Detailed Architecture
+
+### 1. User Identity and Wallet Control
+
+- user authentication is passkey-driven through WebAuthn
+- passkey context is used to control smart account actions
+- account abstraction enables programmable signing and execution policies
+- no seed phrase-first UX is required for baseline usage
+
+### 2. Account Abstraction Execution Plane
+
+- frontend prepares UserOperation payloads
+- bundler handles UserOp inclusion via `EntryPoint`
+- smart account executes downstream calls to protocol contracts
+- paymaster integration is optional and can sponsor transaction costs
+
+This separation keeps UX logic in the app layer and execution guarantees in the ERC-4337 stack.
+
+### 3. Confidential Compute Plane (Zama)
+
+- client-side encrypted inputs are created via relayer SDK
+- proof + handle payloads are submitted to contract methods
+- decrypt requests are handled through relayer/gateway verification path
+- app includes a helper API route for user-decrypt typed-data signatures
+
+This preserves confidentiality of balances and limits while retaining verifiable execution on-chain.
+
+### 4. Contract Plane
+
+- `CardFactory` is responsible for deterministic lifecycle of user cards
+- `PrivateCard` is the core confidential payment primitive
+- `SubscriptionPlanRegistry` provides merchant plan references and ownership
+- confidential token mechanics are consumed through contract integration points
+
+### 5. Merchant Control Plane
+
+- manages plans, subscriptions, billing cycles, attempts, and recovery state
+- computes due work, retries, and at-risk subscriptions
+- currently prototype-grade and local metadata-driven
+- designed to be migrated to durable backend persistence
+
+## Contract Design
+
+### PrivateCard Responsibilities
+
+- hold/manage confidential token logic integration
+- store customer subscription approvals and refs
+- execute merchant renewal pulls within authorization constraints
+- emit events to support merchant-side state reconciliation
+
+### CardFactory Responsibilities
+
+- deploy and map user card instances
+- enforce one-card-per-user design assumptions when configured
+- expose lookup functions for UI/service resolution
+
+### SubscriptionPlanRegistry Responsibilities
+
+- register merchant plan records and references
+- anchor plan identity on-chain
+- support checkout validation and merchant plan mapping
+
+## Data and State Model
+
+On-chain state:
+
+- card ownership and authorization context
+- encrypted subscription authorization artifacts
+- plan registration metadata and refs
+- renewal execution events and settlement traces
+
+Frontend/app state:
+
+- session state and user identity context
+- dashboard projections from contract reads
+- merchant operational metadata for billing and recovery
+
+Control plane state (prototype):
+
+- plan templates
+- customer agreements
+- billing cycles
+- billing attempts
+- retry and recovery indicators
+- activity timeline items
+
+## Security and Trust Boundaries
+
+### Boundary A: User Auth vs Execution
+
+- passkeys authenticate user intent
+- smart accounts enforce execution permissions
+- `EntryPoint` path enforces ERC-4337 validation model
+
+### Boundary B: Confidentiality vs Availability
+
+- amounts/limits are encrypted before on-chain submission
+- relayer/gateway path is required for decrypt workflows
+- service availability of relayer components impacts user experience
+
+### Boundary C: Merchant Operations vs Customer Authorization
+
+- customer gives subscription authorization once per agreement
+- merchant-side renewals must satisfy contract constraints
+- recovery actions are tracked separately from authorization state
+
+### Boundary D: Prototype Metadata vs Canonical Ledger
+
+- canonical funds/state transitions are on-chain
+- merchant operational metadata is local in prototype mode
+- production migration requires durable backend + reconciliation services
 
 ## End-To-End Flow
 
@@ -179,7 +385,7 @@ flowchart TB
 - [route.ts](/home/zoe/Documents/zama/PayMe/frontend/src/app/api/fhe/sign-user-decrypt/route.ts) - decrypt signature route
 - [page.tsx](/home/zoe/Documents/zama/PayMe/frontend/src/app/embed/checkout/page.tsx) - embedded checkout
 
-## Quick Start
+## Local Development
 
 ### 1. Contracts
 
@@ -206,6 +412,17 @@ npm run dev
 
 Use [hardhat/README.md](/home/zoe/Documents/zama/PayMe/hardhat/README.md) and [frontend/README.md](/home/zoe/Documents/zama/PayMe/frontend/README.md) for concrete env variable lists.
 
+### 4. Validate End-To-End
+
+Suggested local validation path:
+
+1. create merchant account and customer account
+2. deploy/verify card creation flow for customer
+3. create merchant plan and open checkout link
+4. approve subscription with encrypted input flow
+5. run at least one renewal and inspect cycle/attempt state
+6. validate decrypt-enabled balance views and error handling
+
 ## Mainnet Readiness Notes
 
 The current prototype is Sepolia-first. Mainnet support requires:
@@ -217,10 +434,25 @@ The current prototype is Sepolia-first. Mainnet support requires:
 
 See [docs/mainnet.md](/home/zoe/Documents/zama/PayMe/docs/mainnet.md) for full migration details.
 
-## Security and Scope
+## Known Prototype Limits
 
-This is a prototype and contest submission, not a fully audited production system.
+- no full external security audit completed
+- merchant control plane persistence is currently prototype-grade
+- limited production-grade observability and reconciliation services
+- relayer and key-management hardening required before production launch
 
-- contracts and cryptographic integrations should undergo external audits
-- current merchant control plane persistence is prototype-grade
-- operational key management and relayer trust assumptions must be hardened for production
+## Roadmap
+
+1. network-aware fhEVM config abstraction (Sepolia/mainnet)
+2. durable merchant backend and reconciliation workers
+3. automated billing worker model with queue and retry policy controls
+4. stronger monitoring, error budgets, and operational playbooks
+5. external security review for contracts and signing flows
+
+## References
+
+- [frontend/README.md](/home/zoe/Documents/zama/PayMe/frontend/README.md)
+- [hardhat/README.md](/home/zoe/Documents/zama/PayMe/hardhat/README.md)
+- [docs/mainnet.md](/home/zoe/Documents/zama/PayMe/docs/mainnet.md)
+- [docs/database-plan.md](/home/zoe/Documents/zama/PayMe/docs/database-plan.md)
+- [docs/smart-wallet-funding-flows.md](/home/zoe/Documents/zama/PayMe/docs/smart-wallet-funding-flows.md)
