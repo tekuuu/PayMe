@@ -56,7 +56,8 @@ Current implementation status in this repository:
 - customer approval and merchant renewal flows are implemented
 - merchant plan, billing, and recovery screens exist in the frontend
 - the embedded checkout route is implemented
-- the merchant control plane is still prototype metadata
+- merchant control plane is backed by PostgreSQL (Supabase) with Drizzle ORM
+- customer activities and subscriptions are persisted server-side
 - Sepolia is the current active network target
 
 ## System Scope
@@ -74,8 +75,9 @@ This repository includes:
 - `ERC-4337` (`EntryPoint`, `UserOperation`, bundler/paymaster-compatible flow)
 - `WebAuthn` / passkeys for keyless user signing UX
 - `Zama fhEVM` and relayer SDK for encrypted input and decrypt workflows
+- `PostgreSQL` (Supabase) and `Drizzle ORM` for merchant control plane persistence
 - `Hardhat` for deployment and contract testing
-- `Next.js` frontend and API routes for UX + relayer-side helpers
+- `Next.js` frontend and API routes for UX + relayer-side helpers + data persistence
 
 ## Repository Structure
 
@@ -89,6 +91,8 @@ This repository includes:
 Primary implementation surfaces:
 
 - `frontend/src/app` - customer + merchant route surfaces
+- `frontend/src/app/api` - API routes for merchant state, customer activities & subscriptions
+- `frontend/src/lib/db` - Drizzle ORM schema and PostgreSQL client
 - `frontend/src/lib/fhevm-sdk` - fhEVM integration wrapper and hooks
 - `frontend/src/app/api/fhe/sign-user-decrypt/route.ts` - decryption signature route
 - `hardhat/contracts` - protocol contracts
@@ -136,10 +140,12 @@ FHE / Relayer Layer:
 
 Operational Layer:
 
+- PostgreSQL database (Supabase) for merchant plans, subscriptions, billing cycles, and customer activities
+- Drizzle ORM for type-safe schema management and migrations
 - bundler submits ERC-4337 UserOperations
 - optional paymaster model for sponsored gas path
 - deployment scripts for contract address propagation
-- environment-configured chain, relayer, and contract endpoints
+- environment-configured chain, relayer, contract, and database endpoints
 
 ## Protocol Flow
 
@@ -156,14 +162,14 @@ sequenceDiagram
     participant Registry as SubscriptionPlanRegistry
     participant Factory as CardFactory
     participant Card as PrivateCard
-    participant CP as Browser Metadata Store
+    participant CP as PostgreSQL (Supabase)
 
     rect rgb(38,38,68)
         Note over Merchant,Registry: STEP 0 · Merchant creates plan
         Merchant->>MUI: Create/Update plan terms
         MUI->>AA: submit UserOperation for plan publish
         AA->>Registry: register/update plan reference
-        MUI->>CP: store local plan metadata
+        MUI->>CP: store plan metadata
     end
 
     rect rgb(20,40,70)
@@ -183,7 +189,7 @@ sequenceDiagram
         SDK-->>Checkout: handles + inputProof
         Checkout->>AA: submit UserOperation
         AA->>Card: execute card subscription call
-        Checkout->>CP: register agreement and first cycle metadata
+        Checkout->>CP: register agreement and cycle metadata
     end
 
     rect rgb(70,45,20)
@@ -200,9 +206,10 @@ sequenceDiagram
 Implementation notes for this flow:
 
 - `SubscriptionPlanRegistry` stores merchant plan references on-chain.
-- merchant operational state is stored in the browser control-plane store, not a server database.
+- merchant operational state is stored in PostgreSQL (Supabase) via API routes, with Drizzle ORM as the type-safe data layer.
 - checkout approval is handled by [`page.tsx`](/home/zoe/Documents/zama/PayMe/frontend/src/app/embed/checkout/page.tsx).
 - billing/retry execution is handled by [`page.tsx`](/home/zoe/Documents/zama/PayMe/frontend/src/app/merchant/billing-cycles/page.tsx).
+- data is synced to Supabase on every write; frontend reads from API first with localStorage fallback during migration.
 
 ## Component Interaction View
 
@@ -232,7 +239,7 @@ flowchart LR
       PC["PrivateCard"]
     end
 
-    MCP["Browser Metadata Store"]
+    MCP["PostgreSQL (Supabase)"]
 
     CSET --> CF
     CBAL --> DECRYPT
@@ -249,9 +256,9 @@ flowchart LR
 
 This view reflects the current repo layout:
 
-- merchant pages update both on-chain plan/card state and local metadata
-- customer checkout touches the relayer SDK and then writes agreement metadata locally after success
-- the decrypt-signing API route supports balance/decrypt flows, not merchant plan creation
+- merchant pages update both on-chain plan/card state and sync metadata to Supabase via API
+- customer checkout touches the relayer SDK, submits on-chain transaction, and persists agreement data to Supabase
+- all reads go through API routes that query Supabase, with localStorage as migration-period fallback
 
 ## Detailed Architecture
 
@@ -290,9 +297,10 @@ This preserves confidentiality of balances and limits while retaining verifiable
 ### 5. Merchant Control Plane
 
 - manages plans, subscriptions, billing cycles, attempts, and recovery state
+- persisted in PostgreSQL (Supabase) with Drizzle ORM schema management
 - computes due work, retries, and at-risk subscriptions
-- currently prototype-grade and local metadata-driven
-- designed to be migrated to durable backend persistence
+- API routes serve state to both merchant and customer frontends
+- designed with migration-ready architecture for future indexer integration
 
 ## Contract Design
 
@@ -327,17 +335,17 @@ On-chain state:
 Frontend/app state:
 
 - session state and user identity context
-- dashboard projections from contract reads
-- merchant operational metadata for billing and recovery
+- dashboard projections from contract reads and API queries
+- merchant operational metadata served from PostgreSQL via API routes
 
-Control plane state (prototype):
+Control plane state (PostgreSQL):
 
-- plan templates
-- customer agreements
-- billing cycles
-- billing attempts
+- plan templates (`merchant_plans`)
+- customer agreements (`subscriptions`)
+- billing cycles (`billing_cycles`)
+- billing attempts (`billing_attempts`)
+- customer activity timeline (`customer_activities`)
 - retry and recovery indicators
-- activity timeline items
 
 ## Merchant Subscription Operations
 
@@ -374,6 +382,12 @@ Application API routes currently used in core flow:
   - utility path for test/development funding operations
 - [`/api/debug/deploy`](/home/zoe/Documents/zama/PayMe/frontend/src/app/api/debug/deploy/route.ts)
   - debug visibility into deployment/environment wiring status
+- [`/api/merchant/[address]/state`](/home/zoe/Documents/zama/PayMe/frontend/src/app/api/merchant/[address]/state/route.ts)
+  - GET/POST merchant control plane state (plans, subscriptions, cycles, attempts)
+- [`/api/customer/[address]/activities`](/home/zoe/Documents/zama/PayMe/frontend/src/app/api/customer/[address]/activities/route.ts)
+  - GET/POST customer activity log
+- [`/api/customer/[address]/subscriptions`](/home/zoe/Documents/zama/PayMe/frontend/src/app/api/customer/[address]/subscriptions/route.ts)
+  - GET customer subscriptions by card address
 
 Core client integration points:
 
@@ -477,6 +491,7 @@ Frontend workspace:
 - set `NEXT_PUBLIC_BUNDLER_URL`
 - set deployed contract addresses
 - set `RELAYER_PRIVATE_KEY` for the decrypt-signing route
+- set `DATABASE_URL` pointing to a PostgreSQL instance (e.g., Supabase connection string)
 
 For the current expected variables, use:
 
@@ -584,11 +599,13 @@ When changing frontend confidential flows:
 
 Important implementation notes for new developers:
 
-- the merchant control plane is currently local metadata, not a durable backend ledger
+- the merchant control plane is now backed by PostgreSQL (Supabase) with Drizzle ORM; browser localStorage is retained as a migration-period fallback
+- all API routes read from and write to the database; frontend hooks fetch from API first, falling back to localStorage
 - the frontend and contracts are tightly coupled through deployed addresses and checkout assumptions
 - the active network target is Sepolia, with mainnet migration notes documented separately
 - fhEVM flows require careful ACL handling when moving encrypted values across contracts
 - the root README is the overview; the workspace READMEs contain lower-level setup details
+- use `npx drizzle-kit push` to push schema changes or `npx drizzle-kit migrate` to apply versioned migrations
 
 ## Mainnet Readiness Notes
 
@@ -596,7 +613,6 @@ The current prototype is Sepolia-first. Mainnet support requires:
 
 - replacing Sepolia-specific SDK config and relayer endpoints
 - mainnet contract deployments and address wiring
-- production-grade backend persistence for merchant control plane
 - infrastructure hardening for billing automation and observability
 
 See [docs/mainnet.md](/home/zoe/Documents/zama/PayMe/docs/mainnet.md) for full migration details.
