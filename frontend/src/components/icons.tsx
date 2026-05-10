@@ -7,6 +7,7 @@ import {
   IconCommand,
   IconCreditCard,
   IconFile,
+  IconFileDownload,
   IconFileText,
   IconHelpCircle,
   IconPhoto,
@@ -83,5 +84,6 @@ export const Icons = {
   subscriptions: IconCalendarRepeat,
   activity: IconActivity,
   send: IconSend,
-  receive: IconDownload
+  receive: IconDownload,
+  reports: IconFileDownload
 };

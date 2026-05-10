@@ -92,6 +92,14 @@ export const merchantNavItems: NavItem[] = [
     isActive: false,
     shortcut: ['m', 'i'],
     items: []
+  },
+  {
+    title: 'Reports',
+    url: '/merchant/reports',
+    icon: 'reports',
+    isActive: false,
+    shortcut: ['m', 'e'],
+    items: []
   }
 ];
 
