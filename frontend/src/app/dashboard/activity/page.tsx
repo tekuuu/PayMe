@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useMe } from '@/providers/auth-provider';
-import { listCustomerActivities } from '@/lib/merchant/control-plane-store';
+import { fetchActivitiesFromApi } from '@/lib/merchant/control-plane-store';
 import { RefreshCw } from 'lucide-react';
 import { ExternalLink } from 'lucide-react';
 import {
@@ -71,15 +71,10 @@ export default function ActivityPage() {
   const [typeFilter, setTypeFilter] = useState<CustomerActivityType | 'all'>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const loadActivities = () => {
+  const loadActivities = async () => {
     if (me?.account) {
-      const key = `payme.customer.activity.${me.account.toLowerCase()}`;
-      console.log('[Activity] Loading with account:', me.account);
-      console.log('[Activity] Storage key:', key);
-      console.log('[Activity] Raw localStorage:', window.localStorage.getItem(key));
-      const stored = listCustomerActivities(me.account);
-      console.log('[Activity] Loaded activities:', stored.length);
-      setActivities(stored);
+      const data = await fetchActivitiesFromApi(me.account);
+      setActivities(data);
     }
   };
 

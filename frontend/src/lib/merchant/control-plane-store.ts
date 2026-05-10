@@ -37,8 +37,11 @@ async function syncMerchantStateToApi(merchantAddress: string, state: MerchantCo
         attempts: state.attempts,
       }),
     });
-    if (!res.ok) throw new Error('API sync failed');
-  } catch {}
+    if (!res.ok) throw new Error(`API sync failed: ${res.status}`);
+    console.log('[syncMerchantStateToApi] Saved:', state.subscriptions.length, 'subscriptions');
+  } catch (e) {
+    console.error('[syncMerchantStateToApi] Error:', e);
+  }
 }
 
 async function syncActivityToApi(walletAddress: string, activity: CustomerActivity) {
@@ -48,8 +51,11 @@ async function syncActivityToApi(walletAddress: string, activity: CustomerActivi
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(activity),
     });
-    if (!res.ok) throw new Error('API sync failed');
-  } catch {}
+    if (!res.ok) throw new Error(`API sync failed: ${res.status}`);
+    console.log('[syncActivityToApi] Saved activity');
+  } catch (e) {
+    console.error('[syncActivityToApi] Error:', e);
+  }
 }
 
 type PartialRecoveryPolicy = Partial<RecoveryPolicy>;
@@ -320,6 +326,30 @@ export function listCustomerActivities(customerCardAddress: string): CustomerAct
   const result = raw ? JSON.parse(raw) : [];
   console.log('[listCustomerActivities] Key:', key, 'found:', result.length);
   return result;
+}
+
+export async function fetchActivitiesFromApi(walletAddress: string): Promise<CustomerActivity[]> {
+  try {
+    const res = await fetch(`/api/customer/${walletAddress}/activities`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (data.error) return [];
+    return data;
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchCustomerSubscriptionsFromApi(cardAddress: string): Promise<import('@/lib/merchant/types').SubscriptionAgreement[]> {
+  try {
+    const res = await fetch(`/api/customer/${cardAddress}/subscriptions`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (data.error) return [];
+    return data;
+  } catch {
+    return [];
+  }
 }
 
 function defaultRecoveryPolicy(): RecoveryPolicy {
@@ -900,7 +930,7 @@ export function readMerchantState(merchantAddress: string) {
   }
 }
 
-export function writeMerchantState(merchantAddress: string, state: MerchantControlPlaneState) {
+export async function writeMerchantState(merchantAddress: string, state: MerchantControlPlaneState) {
   const normalizedMerchant = normalizeAddress(merchantAddress);
   const payload: MerchantControlPlaneState = {
     ...state,
@@ -909,9 +939,7 @@ export function writeMerchantState(merchantAddress: string, state: MerchantContr
     updatedAt: nowIso(),
   };
 
-  try {
-    syncMerchantStateToApi(normalizedMerchant, payload);
-  } catch {}
+  await syncMerchantStateToApi(normalizedMerchant, payload);
 
   if (typeof window === 'undefined') {
     return;

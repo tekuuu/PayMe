@@ -1,12 +1,32 @@
 // @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/client';
+import { eq, desc } from 'drizzle-orm';
 import {
   merchantPlans,
   subscriptions,
   billingCycles,
   billingAttempts,
 } from '@/lib/db/schema';
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ address: string }> }
+) {
+  const { address } = await params;
+
+  try {
+    const [plans, subs, cycles, attempts] = await Promise.all([
+      db.select().from(merchantPlans).where(eq(merchantPlans.merchantAddress, address)).orderBy(desc(merchantPlans.createdAt)),
+      db.select().from(subscriptions).where(eq(subscriptions.merchantAddress, address)).orderBy(desc(subscriptions.createdAt)),
+      db.select().from(billingCycles).where(eq(billingCycles.merchantAddress, address)).orderBy(desc(billingCycles.createdAt)),
+      db.select().from(billingAttempts).where(eq(billingAttempts.merchantAddress, address)).orderBy(desc(billingAttempts.startedAt)),
+    ]);
+    return NextResponse.json({ plans, subscriptions: subs, cycles, attempts });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
 
 export async function POST(
   req: NextRequest,
