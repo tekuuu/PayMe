@@ -24,8 +24,7 @@ import {
   MERCHANT_CONTROL_PLANE_EVENT,
   cancelSubscription,
   formatMicrosToCurrency,
-  listMerchantsForCustomerCard,
-  readMerchantState,
+  fetchCustomerSubscriptionsFromApi,
   registerSubscriptionApproval,
   setSubscriptionCancelAtPeriodEnd,
   updateSubscriptionAllowance,
@@ -267,24 +266,14 @@ export default function SubscriptionsPage() {
     };
   }, []);
 
-  const rows = useMemo(() => {
-    if (!selectedCardAddress) return [] as MySubscriptionRow[];
-    const merchants = listMerchantsForCustomerCard(selectedCardAddress);
-    const result: MySubscriptionRow[] = [];
+  const [apiRows, setApiRows] = useState<MySubscriptionRow[]>([]);
 
-    for (const merchantAddress of merchants) {
-      const state = readMerchantState(merchantAddress);
-      const sub = (state.subscriptions || []).find(
-        (entry) => entry.customerCardAddress?.toLowerCase() === selectedCardAddress.toLowerCase()
-      );
-      if (!sub) continue;
-
-      const plan = (state.plans || []).find((p) => p.id === sub.planId);
-      const amountRefMicros = plan?.amountRefMicros || sub.maxAllowanceRefMicros || '0';
-      const periodSeconds = plan?.billingIntervalSeconds || 30 * 24 * 60 * 60;
-
-      result.push({
-        merchantAddress: merchantAddress as Hex,
+  useEffect(() => {
+    if (!selectedCardAddress) { setApiRows([]); return; }
+    const load = async () => {
+      const subs = await fetchCustomerSubscriptionsFromApi(selectedCardAddress);
+      const result: MySubscriptionRow[] = (subs || []).map((sub: any) => ({
+        merchantAddress: sub.merchantAddress as Hex,
         subscriptionId: sub.id,
         subscriptionRef: sub.subscriptionRef as Hex | undefined,
         planRef: sub.planRef as Hex | undefined,
@@ -292,16 +281,18 @@ export default function SubscriptionsPage() {
         status: sub.status,
         cancelAtPeriodEnd: !!sub.cancelAtPeriodEnd,
         nextChargeAt: sub.nextChargeAt || sub.currentPeriodEnd,
-        planName: plan?.name || 'Plan',
-        planInterval: plan?.interval || 'custom',
-        periodSeconds,
-        amountRefMicros: amountRefMicros,
-        maxAllowanceRefMicros: sub.maxAllowanceRefMicros || amountRefMicros,
-      });
-    }
+        planName: 'Plan',
+        planInterval: 'custom',
+        periodSeconds: 30 * 86400,
+        amountRefMicros: sub.maxAllowanceRefMicros || '0',
+        maxAllowanceRefMicros: sub.maxAllowanceRefMicros || '0',
+      }));
+      setApiRows(result.sort((a: any, b: any) => b.nextChargeAt.localeCompare(a.nextChargeAt)));
+    };
+    load();
+  }, [selectedCardAddress, revision]);
 
-    return result.sort((a, b) => b.nextChargeAt.localeCompare(a.nextChargeAt));
-  }, [revision, selectedCardAddress]);
+  const rows = useMemo(() => apiRows, [apiRows]);
 
   const stats = useMemo(() => {
     return {
