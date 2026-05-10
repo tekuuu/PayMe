@@ -18,10 +18,10 @@ export default function Header() {
       : 'FHE Initializing';
 
   const fheClass = status === 'ready'
-    ? 'text-[var(--status-success)] border-[var(--status-success)]/30 bg-[var(--status-success)]/10'
+    ? 'text-green-600 border-green-500/30 bg-green-500/10 dark:text-green-400 dark:border-green-400/30 dark:bg-green-400/10'
     : status === 'error'
-      ? 'text-[var(--status-error)] border-[var(--status-error)]/30 bg-[var(--status-error)]/10'
-      : 'text-[var(--status-warning)] border-[var(--status-warning)]/30 bg-[var(--status-warning)]/10';
+      ? 'text-red-600 border-red-500/30 bg-red-500/10 dark:text-red-400 dark:border-red-400/30 dark:bg-red-400/10'
+      : 'text-yellow-600 border-yellow-500/30 bg-yellow-500/10 dark:text-yellow-400 dark:border-yellow-400/30 dark:bg-yellow-400/10';
 
   return (
     <header className='relative flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-14'>

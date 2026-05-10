@@ -38,9 +38,9 @@
     /* Semantic Status Colors - Professional Palette */
     --status-success: oklch(0.52 0.15 142);
     --status-success-fg: oklch(1 0 0);
-    --status-warning: oklch(0.72 0.16 75);
-    --status-warning-fg: oklch(0.15 0 0);
-    --status-error: oklch(0.52 0.22 20);
+    --status-warning: oklch(0.75 0.15 65);
+    --status-warning-fg: oklch(0.2 0 0);
+    --status-error: oklch(0.55 0.18 25);
     --status-error-fg: oklch(1 0 0);
     --status-info: oklch(0.55 0.18 250);
     --status-info-fg: oklch(1 0 0);
@@ -85,9 +85,9 @@
     /* Semantic Status Colors - Dark Mode */
     --status-success: oklch(0.65 0.15 142);
     --status-success-fg: oklch(0.95 0.01 240);
-    --status-warning: oklch(0.68 0.18 80);
-    --status-warning-fg: oklch(0.1 0 0);
-    --status-error: oklch(0.6 0.24 20);
+    --status-warning: oklch(0.7 0.15 65);
+    --status-warning-fg: oklch(0.12 0 0);
+    --status-error: oklch(0.63 0.2 25);
     --status-error-fg: oklch(0.95 0.01 240);
     --status-info: oklch(0.60 0.18 250);
     --status-info-fg: oklch(0.95 0.01 240);
