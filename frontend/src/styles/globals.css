@@ -69,6 +69,14 @@
   .btn-primary-hover {
     @apply transition-all duration-200 hover:shadow-lg hover:shadow-primary/20;
   }
+
+  .animate-float {
+    animation: float 8s ease-in-out infinite;
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.8s ease-out forwards;
+  }
 }
 
 @supports (animation-timeline: view()) {
@@ -141,6 +149,30 @@
 
   100% {
     background-position: 0% 50%;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+    opacity: 0.03;
+  }
+
+  50% {
+    transform: translateY(-20px) rotate(1deg);
+    opacity: 0.08;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
