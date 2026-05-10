@@ -150,8 +150,7 @@ export default function MerchantReportsPage() {
   return (
     <div className='flex-1 space-y-4 p-6'>
       <div className='space-y-1'>
-        <h2 className='text-2xl font-semibold tracking-tight text-foreground'>Reports</h2>
-        <p className='text-sm text-muted-foreground'>Export compliance reports in CSV format for your records.</p>
+        <h2 className='text-sm font-bold uppercase tracking-[0.22em] text-foreground sm:text-base'>Reports</h2>
       </div>
       <div className='h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent' />
 
