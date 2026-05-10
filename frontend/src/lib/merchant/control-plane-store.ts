@@ -508,6 +508,27 @@ function getPlanById(state: MerchantControlPlaneState, planId: string): Merchant
   return state.plans.find((plan) => plan.id === planId);
 }
 
+function getOrReferencePlan(
+  state: MerchantControlPlaneState,
+  input: RegisterSubscriptionApprovalInput
+): MerchantPlan {
+  const existing = input.planId ? getPlanById(state, input.planId) : undefined;
+  if (existing) return existing;
+
+  return {
+    id: input.planId || `plan_${Date.now()}_ref`,
+    merchantAddress: input.merchantAddress,
+    name: input.planName || 'Plan',
+    interval: intervalFromSeconds(input.periodSeconds || 30 * 86400),
+    billingIntervalSeconds: input.periodSeconds || 30 * 86400,
+    amountRefMicros: input.amountRef || '0',
+    status: 'active',
+    checkoutSlug: '',
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+}
+
 function intervalFromSeconds(seconds: number): PlanInterval {
   const days = seconds / 86400;
   if (days > 25 && days < 35) return 'monthly';
@@ -1044,10 +1065,7 @@ export function registerSubscriptionApproval(
   input: RegisterSubscriptionApprovalInput
 ): RegisterSubscriptionApprovalResult {
   const state = readMerchantState(input.merchantAddress);
-  const plan =
-    input.planId && getPlanById(state, input.planId)
-      ? (getPlanById(state, input.planId) as MerchantPlan)
-      : ensurePlan(state, input.planName, input.periodSeconds, input.amountRef);
+  const plan = getOrReferencePlan(state, input);
   const subscription = ensureSubscription(state, {
     customerCardAddress: input.customerCardAddress,
     customerSmartWallet: input.customerSmartWallet,
