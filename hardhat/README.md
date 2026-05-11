@@ -54,7 +54,8 @@ hardhat/
 │   ├── SubscriptionPlanRegistry.sol  # Merchant plan registry
 │   ├── AccountRegistry.sol     # Smart wallet resolution
 │   ├── lib/                    # Shared libraries
-│   └── mocks/                  # Test mocks
+│   ├── mocks/                  # Test mocks
+│   └── smart-wallet/           # AA: SimpleAccount, WebAuthn, P256
 ├── deploy/
 │   └── 002_deploy_card_factory.ts   # Deployment script
 ├── scripts/                    # Utility scripts
