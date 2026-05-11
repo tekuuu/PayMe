@@ -1,54 +1,145 @@
-# PayMe Smart Contracts (FHE + AA)
+# PayMe Smart Contracts
 
-This directory contains the Solidity smart contracts powering the **PayMe** experience, heavily utilizing the **`@fhevm/solidity`** library for state encryption and mathematical calculation over ciphertexts.
+Solidity contracts for confidential subscription payments using Zama fhEVM and ERC-4337 account abstraction. Deployed on Sepolia testnet.
 
-## 🏗️ Contracts Overview
+## Tech Stack
 
-1. **`PrivateCard.sol`**: This is the core "Vault/Card" contract deployed for each user.
-   - Holds an encrypted `cUSDC` balance securely.
-   - Allows users to approve recurring Subscriptions using homomorphic conditionals.
-   - Features `syncBalanceAcl()` utilizing Zama's `FHE.allow` mechanism to safely transfer ciphertext reading rights between the card itself, the owner, and the frontend decryption relayers.
-2. **`CardFactory.sol`**: A lightweight deterministic factory enabling the frontend client to map deterministic user addresses to individual deployed `PrivateCard` contracts seamlessly.
-3. **`CustomWrapper.sol`**: Confidential ERC-20 token scaffolding for local debugging, wrapping plain `USDC` into `cUSDC` (Confidential USDC).
+- **Solidity** — with `@fhevm/solidity` for homomorphic encryption operations
+- **Hardhat** — compilation, testing, deployment
+- **TypeScript** — test files and deployment scripts
+- **Viem** — TypeScript client interactions
+- **Zama fhEVM** — encrypted balances, encrypted inputs, ACL management
 
-## ⚙️ Development & Deployment
+## Contract Inventory
 
-The contract suite is managed through the Hardhat framework configuration.
+### `PrivateCard.sol`
 
-### Prerequisites
+The core vault contract deployed per user via `CardFactory`. Responsibilities:
 
-\`\`\`bash
-npm install
-\`\`\`
+- Holds encrypted `cUSDC` balance
+- Manages subscription approvals with encrypted spending caps (`maxAllowanceRef`)
+- Executes merchant pull operations (`pullSubscriptionWithProof`) within authorized limits
+- Handles renewal charges for subscription refs (`chargeSubscriptionRefRenewal`)
+- `syncBalanceAcl()` — manages encrypted ciphertext read permissions via `FHE.allow` between card owner, contract, and relayer decrypt signer
 
-You must configure an `.env` file within the `/hardhat` directory:
+**Key methods:**
+- `subscribeAndChargeRefWithProof` — one-step approval + first payment
+- `chargeSubscriptionRefRenewal` — merchant-side renewal pull
+- `pullSubscriptionWithProof` — encrypted pull with proof
+- `shield` / `unshield` — wrap/unwrap confidential tokens
+- `transfer` — encrypted transfers between cards
 
-\`\`\`env
-# Infrastructure Providers
+### `CardFactory.sol`
+
+Deterministic factory for deploying and tracking user `PrivateCard` instances.
+
+- One-card-per-user enforced by default
+- Maps user addresses to deployed card addresses
+- Emits `CardCreated`, `CardLinked`, `CardUnlinked` events
+
+### `SubscriptionPlanRegistry.sol`
+
+On-chain registry for merchant plan records.
+
+- Register/update merchant plans with: price, interval, active status
+- Plan identity anchored on-chain for checkout validation
+- Events: `PlanRegistered`, `PlanUpdated`, `PlanArchived`
+
+### `AccountRegistry.sol`
+
+Maps smart wallet owners to account implementation addresses.
+
+- Used by the frontend to resolve smart wallet address from passkey public key
+- Critical for deterministic wallet computation
+
+### `lib/` — Library contracts
+
+Shared helper contracts used across the protocol.
+
+### `mocks/` — Mock contracts
+
+Test doubles for local development and unit testing.
+
+## Project Structure
+
+```
+hardhat/
+├── contracts/
+│   ├── PrivateCard.sol         # Core vault with FHE subscription logic
+│   ├── CardFactory.sol         # Deterministic card deployment
+│   ├── SubscriptionPlanRegistry.sol  # Merchant plan registry
+│   ├── AccountRegistry.sol     # Smart wallet resolution
+│   ├── lib/                    # Shared libraries
+│   └── mocks/                  # Test mocks
+├── deploy/
+│   └── 002_deploy_card_factory.ts   # Deployment script
+├── scripts/                    # Utility scripts
+├── test/
+│   ├── unit/                   # Unit tests
+│   └── integration/            # Integration tests (AA + FHE flows)
+├── tasks/                      # Hardhat custom tasks
+└── hardhat.config.ts           # Hardhat configuration
+```
+
+## Environment
+
+Create `hardhat/.env`:
+
+```env
 INFURA_API_KEY="YOUR_INFURA_KEY"
 PRIVATE_KEY="YOUR_DEPLOYER_PRIVATE_KEY"
+CUSDC_WRAPPER_ADDRESS="0x..."  # Sepolia cUSDC wrapper
+```
 
-# Zama Setup
-CUSDC_WRAPPER_ADDRESS="0x..." # Reference to fhEVM Confidential USDC wrapper
-\`\`\`
+## Commands
 
-### Compilation
+```bash
+# Install
+npm install
 
-Because `@fhevm/solidity` has specific EVM version compilation rules to support precompiles like `TFHE`, ensure you run compilation carefully:
-
-\`\`\`bash
+# Compile (ensure EVM version compatible with fhEVM precompiles)
 npx hardhat compile
-\`\`\`
 
-### Deployment
+# Run tests
+npm test
 
-Deploy to the fhEVM Coprocessor network (or standard testnets using the Coprocessor):
+# Unit tests only
+npx hardhat test test/unit/
 
-\`\`\`bash
+# Integration tests
+npx hardhat test test/integration/
+
+# Deployment to Sepolia
 npx hardhat run deploy/002_deploy_card_factory.ts --network sepolia
-\`\`\`
 
-Once deployed, copy the new Factory address into the frontend `.env.local` as `NEXT_PUBLIC_PRIVATE_CARD_FACTORY_ADDRESS`.
+# Coverage
+npx hardhat coverage
+```
 
-### Updating the ABI
-When you modify `PrivateCard.sol`, be sure to copy the `artifacts/contracts/PrivateCard.sol/PrivateCard.json` into the Next.js `constants` or use the deployment ABI sync script if configured.
+## Testing
+
+Tests are organized into two levels:
+
+- **Unit tests** (`test/unit/`) — individual contract behavior in isolation
+- **Integration tests** (`test/integration/`) — end-to-end flows with AA bundling, using `@fhevm/hardhat-plugin` for encrypted handle simulation
+
+fhEVM-heavy flows require the Hardhat fhEVM plugin. Integration tests verify:
+- Card deployment via factory
+- Subscription approval + first charge
+- Renewal and retry flows
+- ACL permission management
+
+## Deployment Flow
+
+1. Deploy `AccountRegistry`, `SubscriptionPlanRegistry`
+2. Deploy `CardFactory` with references to both registries
+3. Propagate deployed addresses to `frontend/.env.local`
+4. Update ABI artifacts in frontend if contract interfaces change
+
+## ABI Updates
+
+After modifying contracts, update the frontend ABI:
+
+1. Compile: `npx hardhat compile`
+2. Copy `artifacts/contracts/PrivateCard.sol/PrivateCard.json` ABI into `frontend/src/config/constants.ts`
+3. Verify frontend method signatures match contract changes
