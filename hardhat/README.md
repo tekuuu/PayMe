@@ -14,47 +14,31 @@ Solidity contracts for confidential subscription payments using Zama fhEVM and E
 
 ### `PrivateCard.sol`
 
-The core vault contract deployed per user via `CardFactory`. Responsibilities:
-
-- Holds encrypted `cUSDC` balance
-- Manages subscription approvals with encrypted spending caps (`maxAllowanceRef`)
-- Executes merchant pull operations (`pullSubscriptionWithProof`) within authorized limits
-- Handles renewal charges for subscription refs (`chargeSubscriptionRefRenewal`)
-- `syncBalanceAcl()` — manages encrypted ciphertext read permissions via `FHE.allow` between card owner, contract, and relayer decrypt signer
-
-**Key methods:**
-- `subscribeAndChargeRefWithProof` — one-step approval + first payment
-- `chargeSubscriptionRefRenewal` — merchant-side renewal pull
-- `pullSubscriptionWithProof` — encrypted pull with proof
-- `shield` / `unshield` — wrap/unwrap confidential tokens
-- `transfer` — encrypted transfers between cards
-
-### `CardFactory.sol`
-
-Deterministic factory for deploying and tracking user `PrivateCard` instances.
-
-- One-card-per-user enforced by default
-- Maps user addresses to deployed card addresses
-- Emits `CardCreated`, `CardLinked`, `CardUnlinked` events
-
-### `SubscriptionPlanRegistry.sol`
-
-On-chain registry for merchant plan records.
-
-- Register/update merchant plans with: price, interval, active status
-- Plan identity anchored on-chain for checkout validation
-- Events: `PlanRegistered`, `PlanUpdated`, `PlanArchived`
-
-### `AccountRegistry.sol`
-
-Maps smart wallet owners to account implementation addresses.
-
-- Used by the frontend to resolve smart wallet address from passkey public key
-- Critical for deterministic wallet computation
+| Contract | Purpose |
+|----------|---------|
+| `PrivateCard.sol` | Core vault with encrypted cUSDC balance, subscription approvals, renewal pulls |
+| `CardFactory.sol` | Deterministic factory for deploying user PrivateCard instances |
+| `SubscriptionPlanRegistry.sol` | On-chain merchant plan records |
+| `AccountRegistry.sol` | Smart wallet address resolution from passkey public key |
+| `SimpleAccount.sol` | ERC-4337 smart account with WebAuthn signing |
+| `SimpleAccountFactory.sol` | Factory for deterministic smart account deployment |
+| `WebAuthn.sol` | P-256 signature verification for passkeys |
+| `P256.sol` | secp256r1 curve operations |
 
 ### `lib/` — Library contracts
 
 Shared helper contracts used across the protocol.
+
+### `smart-wallet/` — Account Abstraction
+
+ERC-4337 smart account implementation for passkey-based wallets.
+
+| Contract | Purpose |
+|----------|---------|
+| `SimpleAccount.sol` | ERC-4337 smart account with WebAuthn signing |
+| `SimpleAccountFactory.sol` | Deterministic factory for deploying smart accounts |
+| `WebAuthn.sol` | P-256 signature verification for passkeys |
+| `P256.sol` | secp256r1 curve operations |
 
 ### `mocks/` — Mock contracts
 
